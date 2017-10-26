@@ -1,0 +1,79 @@
+---
+title: "Análise de Gastos de Deputados"
+author: "Hadrizia Santos"
+date: "25 de outubro de 2017"
+output: html_document
+---
+
+**1. Quais os partidos que mais fazem uso da CEAP? Quais os partidos que menos fazem uso? Mesmas perguntas conisderando valores em R$.**
+
+Para responder a esta pergunta, deve-se inicialmente carregar os dados:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(readr)
+```
+
+```{r eval = FALSE}
+#library(dplyr)
+#library(ggplot2)
+#library(scales)
+#library(reshape2)
+#library(readr)
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE))
+```
+
+```{r include = FALSE}
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE)) 
+```
+
+  Depois, precisa-se agrupar os deputados de acordo com seus partidos e sumarizar a contagem de uso da CEAP. A seguir, pegam-se os 10 partidos que mais usaram o CEAP e os que menos usaram e exibe-os em dois gráficos de barra horizontal:
+```{r}
+depUsoCEAP <- dadosCEAP %>% group_by(sgPartido) %>% 
+  summarise(contUsoCEAP = n()) %>% na.omit()
+
+ggplot(depUsoCEAP %>% top_n(10), 
+       aes(x = reorder(sgPartido, contUsoCEAP), y = contUsoCEAP)) + geom_bar(stat = "identity", fill = "purple") + coord_flip() + xlab("Partidos") +
+ylab("Uso CEAP") +
+ggtitle("Top 10 Partidos que mais fazem uso da CEAP") +
+theme_bw()
+
+ggplot(depUsoCEAP %>% top_n(-10), 
+       aes(x = reorder(sgPartido, -contUsoCEAP), y = contUsoCEAP)) + geom_bar(stat = "identity", fill = "purple") + coord_flip() +
+theme_bw() + 
+xlab("Partidos") +
+ylab("Uso CEAP") +
+ggtitle("Top 10 Partidos que menos fazem uso da CEAP")
+```
+
+```{r}
+depUsoRSCEAP <- dadosCEAP %>% group_by(sgPartido) %>% 
+  summarise(dinheiroGasto = sum(valorLíquido), usoCEAP = n()) %>% 
+  arrange(desc(dinheiroGasto, usoCEAP))%>%
+  na.omit()
+
+ggplot(depUsoRSCEAP %>% top_n(10), 
+         aes(x = reorder(sgPartido, dinheiroGasto), y = dinheiroGasto)) + 
+  geom_bar(stat = "identity", fill = "purple") + coord_flip() +
+  theme_bw() + 
+  ylab("Partidos") +
+  xlab("Gasto (R$)") +
+  ggtitle("Top 10 Partidos que mais fazem uso da CEAP considerando R$")
+
+
+
+```
+
+
+
+
+
+
+**2. Quais os tipos de despesa mais comuns no uso da CEAP? Mesma pergunta considerando valores em R$.**
+
+**3. Levando em conta o estado pelo qual o deputado se elegeu, quais os estados que mais fazem uso da CEAP? Quais os que menos fazem uso? Mesmas perguntas considerando gastos em R$. Por que você acha isso?**
