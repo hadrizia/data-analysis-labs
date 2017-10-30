@@ -7,8 +7,8 @@ output: html_document
 
 **1. Quais os partidos que mais fazem uso da CEAP? Quais os partidos que menos fazem uso? Mesmas perguntas conisderando valores em R$.**
 
-Para responder a esta pergunta, deve-se inicialmente carregar os dados:
-```{r setup, include=FALSE}
+Inicialmente carregam-se os dados a serem analisados:
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
@@ -16,6 +16,8 @@ library(scales)
 library(reshape2)
 library(readr)
 library(gridExtra)
+library(plotly)
+aqua <- "#2bd6c4"
 
 ```
 
@@ -25,6 +27,8 @@ library(gridExtra)
 #library(scales)
 #library(reshape2)
 #library(readr)
+library(gridExtra)
+library(plotly)
 dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
 dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE))
 ```
@@ -34,55 +38,37 @@ dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
 dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE)) 
 ```
 
-  Depois, precisa-se agrupar os deputados de acordo com seus partidos e sumarizar a contagem de uso da CEAP. A seguir, pegam-se os 10 partidos que mais usaram o CEAP e os que menos usaram e exibe-os em dois gráficos de barra horizontal:
+  Agrupa-se os deputados de acordo com seus partidos e sumariza a contagem de uso e o valor restituído da CEAP. 
   
 ```{r}
-knitr::opts_chunk$set(fig.align = "center", fig.width = 10)
 depUsoCEAP <- dadosCEAP %>% group_by(sgPartido) %>% 
   summarise(contUsoCEAP = n(), dinheiroGasto = sum(valorLíquido)) %>% na.omit()
-```
-
-```{r}
-g1 <- ggplot(depUsoCEAP %>% top_n(10), 
-             aes(x = reorder(sgPartido, contUsoCEAP), y = contUsoCEAP)) + geom_bar(stat = "identity", fill = "#2bd6c4") + coord_flip() + 
-  xlab("Partidos") +
-  ylab("Uso CEAP") +
-  ggtitle(ggtitle("Top 10",subtitle = "Partidos que mais usam o CEAP")) +
-  theme_bw()
-
-g2 <- ggplot(depUsoCEAP %>% top_n(-10), 
-             aes(x = reorder(sgPartido, -contUsoCEAP), y = contUsoCEAP)) + geom_bar(stat = "identity", fill = "#ff6666") + coord_flip() +
-   xlab("") +
+ggplot(depUsoCEAP, 
+         aes(x = reorder(sgPartido, contUsoCEAP), y = contUsoCEAP)) + 
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() +
   theme_bw() + 
-  ylab("Uso CEAP") +
-  ggtitle("Top 10", subtitle = "Partidos que menos usam o CEAP")
+  xlab("Partidos") +
+  ylab("Uso") +
+  ggtitle("Partidos que usam CEAP")
 
-grid.arrange(g1, g2, ncol=2)
-```
-
-
-```{r}
-
-p1 <- ggplot(depUsoCEAP %>% top_n(10), 
+x <- list(
+  title = "Uso de CEAP"
+)
+y <- list(
+  title = "Partido"
+)
+plot_ly(depUsoCEAP, x =~contUsoCEAP, y = ~sgPartido, color = aqua) %>%
+  layout(xaxis = x, yaxis = y)
+ggplot(depUsoCEAP, 
          aes(x = reorder(sgPartido, dinheiroGasto), y = dinheiroGasto)) + 
-  geom_bar(stat = "identity", fill = "#2bd6c4") + coord_flip() +
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() +
   theme_bw() + 
   xlab("Partidos") +
-  ylab("Gasto (R$)") +
-  ggtitle("Top 10", subtitle = "Partidos que mais fazem uso da CEAP considerando R$")
-
-p2 <- ggplot(depUsoCEAP %>% top_n(-10), 
-         aes(x = reorder(sgPartido, -dinheiroGasto), y = dinheiroGasto)) + 
-  geom_bar(stat = "identity", fill = "#ff6666") + coord_flip() +
-  theme_bw() + 
-  xlab("Partidos") +
-  ylab("Gasto (R$)") +
-  ggtitle("Top 10", subtitle = "Partidos que menos usam CEAP considerando R$")
-
-grid.arrange(p1, p2, ncol=2)
-
+  ylab("Dinheiro gasto (R$)") +
+  ggtitle("Partidos que gastam mais dinheiro da CEAP")
 ```
 
+Os gráficos acima listam os partidos que fazem uso da CEAP e os que gastam mais dinheiro usando a CEAP ordenados de forma decrescente. Em relação ao primeiro gráfico, nota-se que os 10 partidos que mais utilizam a CEAP são **PT, PMDB, PSDB, PP, PR, PSB, PSD, DEM, PDT** e **PRB**, enquanto que os partidos **PTdoB, PMN PRTB, PRP, PSL, PEN, REDE, PROS, AVANTE** e **PSOL** são os que menos utilizam a CEAP. Sobre o segundo gráfico, percebe-se que os 10 partidos que mais gastaram dinheiro foram **PMDB, PT, PSDB, PP, PR PSD, PSB, DEM, PRB** e **PDT**, enquanto que os partidos **PTdoB, PMN, PRTB, PRP, PSL PEN, REDE, PSOL, AVANTE** e **PROS** foram os que obtiveram menos gastos. 
 
 **2. Quais os tipos de despesa mais comuns no uso da CEAP? Mesma pergunta considerando valores em R$.**
 ```{r}
@@ -93,19 +79,19 @@ usoTipoDespesa <- dadosCEAP %>% group_by(tipoDespesa) %>%
 
 ```{r}
 ggplot(usoTipoDespesa, aes(x = reorder(tipoDespesa, cont), y = cont)) +
-  geom_bar(stat = "identity") +
+  geom_bar(stat = "identity", fill = aqua) +
   theme_bw() + coord_flip() + scale_x_discrete(labels = abbreviate) +
   xlab("Tipo de Despesa") +
-  ylab("Uso") + ggtitle("Tipos de despesas mais comuns com CEAP")
+  ylab("Uso") + ggtitle("Tipos de despesas mais usados com CEAP")
 ```
 ```{r}
 ggplot(usoTipoDespesa, aes(x = reorder(tipoDespesa, somaValor), y = somaValor)) +
-  geom_bar(stat = "identity") +
+  geom_bar(stat = "identity", fill = aqua) +
   theme_bw() + coord_flip() + scale_x_discrete(labels = abbreviate) +
   xlab("Tipo de Despesa") +
-  ylab("Valor (R$)") + ggtitle("Tipos de despesas mais comuns com CEAP", subtitle = "Considerando valores em dinheiro.")
+  ylab("Valor (R$)") + ggtitle("Tipos de despesas que gastaram mais dinheiro com a CEAP")
 ```
-
+Analisando os gráficos acima que listam os tipos de despesas mais usados e os que gastaram mais dinheiro com a CEAP, percebemos que os tipos de despesas mais com a CEAP são **Emissão de Bilhete Aéreo, COMBUSTÍVEIS E LUBRIFICANTES, TELEFONIA, SERVIÇOS POSTAIS** e **FORNECIMENTO DE ALIMENTAÇÃO DO PARLAMENTAR**, e as menos comuns são **PARTICIPAÇÃO EM CURSO, PALESTRA OU EVENTO SIMILAR, LOCAÇÃO OU FRETAMENTO DE EMBARCAÇÕES, ASSINATURA DE PUBLICAÇÕES** e **SERVIÇO DE SEGURANÇA PRESTADO POR EMPRESA ESPECIALIZADA**.
 
 **3. Levando em conta o estado pelo qual o deputado se elegeu, quais os estados que mais fazem uso da CEAP? Quais os que menos fazem uso? Mesmas perguntas considerando gastos em R$. Por que você acha isso?**
 
@@ -114,32 +100,52 @@ usoEstado <- dadosCEAP %>% group_by(sgUF) %>%
   summarise(count = n(), somaValor = sum(valorLíquido)) %>% arrange(desc(count)) %>% na.omit()
 
 ggplot(usoEstado, aes(x = reorder(sgUF, count), y = count)) +
-  geom_bar(stat = "identity") + coord_flip() + xlab("Estado") + ylab("Uso")
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() + xlab("Estado") + ylab("Uso") + theme_bw()
 
 ggplot(usoEstado, aes(x = reorder(sgUF, somaValor), y = somaValor)) +
-  geom_bar(stat = "identity") + coord_flip() + xlab("Estado") + ylab("Valor gasto (R$)")
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() + xlab("Estado") + ylab("Valor gasto (R$)") + theme_bw()
 ```
+
+Os estados que mais utilizam a CAEP são **São Paulo, Minas Gerais, Rio de Janeiro, Rio Grande do Sul, Bahia, Paraná** e **Pernambuco**; os que menos utilizam são **Distrito Federal, Amapá, Roraima, Tocantis** e **Sergipe**. Em relação ao valor gasto, **São Paulo, Minas Gerais, Rio de Janeiro, Bahia** e **Rio Grande do Sul** também são os estados que mais gastam dinheiro da CEAP, equanto que os que menos gastam são os estados de **Distrito Federal, Mato Grosso, Amapá, Sergipe** e **Tocantis**. Acredito que os resultados sejam parecidos pois o uso da CEAP por estado pode ser proporcional ao valor gasto, já que os gráficos apresentam bastante similaridades.
+
 **4. Quais os parlamentares que mais gastam com CEAP e quais os que menos gastam?**
+
 ```{r}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10)
 usoParlamentar <- dadosCEAP %>% group_by(nomeParlamentar) %>%
   summarise(valorGasto = sum(valorLíquido)) %>% arrange(desc(valorGasto)) %>% na.omit() 
 
-ggplot(usoParlamentar %>% top_n(10), 
+ggplot(usoParlamentar, 
        aes(x = reorder(nomeParlamentar, valorGasto), y = valorGasto)) + 
-  geom_bar(stat = "identity") + coord_flip() + xlab("Parlamentar") + ylab("Valor gasto (R$)")
-
-ggplot(usoParlamentar %>% top_n(-10), 
-       aes(x = reorder(nomeParlamentar, -valorGasto), y = valorGasto)) + 
-  geom_bar(stat = "identity") + coord_flip() + xlab("Parlamentar") + ylab("Valor gasto (R$)")
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() + xlab("Parlamentar") + ylab("Valor gasto (R$)") + theme_bw()
 ```
 
+Os dados exibidos no gráfico acima são muito difíceis de visualizar, por isso foram feitos dois gráficos com os 10 parlamentares que mais gastam com a CEAP e os 10 que menos gastam.
+
+```{r}
+p1 <- ggplot(usoParlamentar %>% top_n(10), 
+       aes(x = reorder(nomeParlamentar, valorGasto), y = valorGasto)) + 
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() + xlab("Parlamentar") + ylab("Valor gasto (R$)") + theme_bw() +
+  ggtitle("TOP 10", subtitle = "Parlamentares que mais gastaram dinheiro")
+
+p2 <- ggplot(usoParlamentar %>% top_n(-10), 
+       aes(x = reorder(nomeParlamentar, -valorGasto), y = valorGasto)) + 
+  geom_bar(stat = "identity", fill = aqua) + coord_flip() + xlab("Parlamentar") + ylab("Valor gasto (R$)") + theme_bw() +   ggtitle("TOP 10", subtitle = "Parlamentares que menos gastaram dinheiro")
+
+grid.arrange(p1, p2, ncol=2)
+```
+
+Podemos ver que os 10 parlamentares que mais gastam dinheiro são **Edio Lopes, Hiran Gonçalves, Jhonatan de Jesus, Vinicius Gurgel, Remídio Monai, Rocha, Nilton Capixaba, Alan Rick, Carlos Andrade** e **Silas Câmara**; e os parlamentares **João Caldas, Eliseu Padilha, Rui Costa, Antônio Andrade,Camilo Cola, Marcio Monteiro, MArcelo Almeida, Renan Filho, Henrique Oliveira** e **Cezar Silvestri** foram os que gastaram menos dinheiro da CEAP.
 
 **5. Existe correlação entre a quantidade de gastos no exterior e o valor restituído da CEAP?**
+
+**OBS:** Considerou-se viagens ao exterior as despesas tituladas como *Emissão de Bilhete Aéreo, Passagens aéreas e Passagens terrestres, marítimas ou fluviais*.
+
 ```{r}
-viagens <- c('Emissão Bilhete Aéreo', 'PASSAGENS AÉREAS', 'PASSAGENS TERRESTRES, MARÍTIMAS OU FLUVIAIS')
+viagensExterior <- c('Emissão Bilhete Aéreo', 'PASSAGENS AÉREAS', 'PASSAGENS TERRESTRES, MARÍTIMAS OU FLUVIAIS')
 
 despesaExterior <- dadosCEAP %>% 
-  filter(tipoDespesa %in% viagens) %>% group_by(idCadastro) %>% summarise(valorGastoExterior = mean(valorLíquido))
+  filter(tipoDespesa %in% viagensExterior) %>% group_by(idCadastro) %>% summarise(valorGastoExterior = mean(valorLíquido))
 
 despesaCEAP <- dadosCEAP %>% group_by(idCadastro) %>% 
   summarise(valorGastoTotal = mean(valorLíquido))
@@ -148,11 +154,39 @@ rel <- inner_join(despesaExterior, despesaCEAP, "idCadastro")
 
 ggplot(rel, aes(x = valorGastoExterior, y = valorGastoTotal)) +
     geom_point(shape = 1) +
-    geom_smooth(method = "lm") + 
-  labs(title = "Correlação entre gastos", x = "Despesa exterior", y = "Despesa total") + xlim(0, 2000)
+    geom_smooth(method = "lm", color = aqua) + 
+  labs(title = "Correlação entre gastos", x = "Despesa exterior", y = "Despesa total") + xlim(0, 2000) + theme_bw()
 ```
 ```{r}
 correlacao <- cor(rel$valorGastoExterior, rel$valorGastoTotal)
 #[1] 0.3085323: Correlação desprezível
+```
+
+##**BÔNUS**
+
+**1. Quais os estados cujos deputados gastam mais no exterior? Quais os estados cujos deputados gastam menos no exterior? **
+
+```{r}
+despesaExteriorPorEstado <- dadosCEAP %>% 
+  filter(tipoDespesa %in% viagensExterior) %>% group_by(sgUF) %>% summarise(valorGastoExteriorPorEstado = sum(valorLíquido)) %>% arrange(desc(valorGastoExteriorPorEstado)) %>% na.omit()
+
+
+ggplot(despesaExteriorPorEstado, aes(x = reorder(sgUF, valorGastoExteriorPorEstado), y = valorGastoExteriorPorEstado)) +
+  geom_bar(stat = "identity", fill = aqua) + ggtitle("Estados que mais gastaram no exterior") + coord_flip() +
+  xlab("Estado") + ylab("Valor gasto (R$)") + theme_bw()
+```
+
+Os estados que mais gastam no exterior são **São Paulo, Rio de Janeiro, Minas Gerais, Rio Grande do Sul, Bahia, Paraná, Pernambuco, Ceará, Pará** e **Santa Catarina**; e os que menos gastam dinheiro no exterior são os estados de **Distrito Federal, Goiás, Tocantis, Amapá, Sergipe, Mato Grosso do Sul, Espírito Santo, Mato Grosso, Alagoas** e **Rio Grande do Norte**.
+
+**2. Quais os deputados que mais ultrapassam o limite de CEAP do seu estado?**
+
+```{r eval=FALSE}
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+```
+
+```{r include=FALSE}
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+teste <- merge(dadosCEAP, dadosLimiteCEAP, all.x = TRUE)
+
 ```
 
