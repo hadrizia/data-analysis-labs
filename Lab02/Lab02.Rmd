@@ -1,0 +1,63 @@
+---
+title: "Lab02: Análise de Gastos de Deputados"
+author: "Hadrizia Santos"
+date: "06 de novembro de 2017"
+output: html_document
+---
+
+
+**1. Quais os partidos que mais fazem uso da CEAP? Quais os partidos que menos fazem uso? Mesmas perguntas conisderando valores em R$.**
+
+Inicialmente carregam-se os dados a serem analisados:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(readr)
+library(gridExtra)
+library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE)) 
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
+dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
+
+```
+
+```{r eval = FALSE}
+#library(dplyr)
+#library(ggplot2)
+#library(scales)
+#library(reshape2)
+#library(readr)
+#library(gridExtra)
+#library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE))
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
+dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
+```
+**Perguntas: Deputados que gasta mais na PB, despesas, fornecedores, partidos, etc**
+
+```{r}
+
+deputadosExcederamLimite <- dadosCEAP %>% 
+  group_by(nomeParlamentar, sgUF, sgPartido, fornecedor) %>%
+  summarise(valor = sum(valorLíquido)) %>% 
+  filter(sgUF == "PB") %>%
+  arrange(desc(valor)) %>% na.omit() %>% ungroup()
+
+plot_ly(deputadosExcederamLimite %>% ungroup(limite_mensal) %>% top_n(10), x =~ valor-limite_mensal, y=~reorder(nomeParlamentar, (valor-limite_mensal)), color=~sgUF) %>%
+   layout(title = "TOP 10 Parlamentares que Excederam Limite Mensal",
+          yaxis = list(title = "Parlamentar"),
+          xaxis = list(title ="Valor gasto excedido (R$)"))
+
+
+```
+
+

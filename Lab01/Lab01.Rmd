@@ -1,0 +1,235 @@
+---
+title: "Análise de Gastos de Deputados"
+author: "Hadrizia Santos"
+date: "25 de outubro de 2017"
+output: html_document
+---
+
+**1. Quais os partidos que mais fazem uso da CEAP? Quais os partidos que menos fazem uso? Mesmas perguntas conisderando valores em R$.**
+
+Inicialmente carregam-se os dados a serem analisados:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(readr)
+library(gridExtra)
+library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE)) 
+
+```
+
+```{r eval = FALSE}
+#library(dplyr)
+#library(ggplot2)
+#library(scales)
+#library(reshape2)
+#library(readr)
+#library(gridExtra)
+#library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE))
+```
+
+  Agrupa-se os deputados de acordo com seus partidos e sumariza a contagem de uso e o valor total restituído da CEAP. 
+  
+```{r}
+depUsoCEAP <- dadosCEAP %>% group_by(sgPartido) %>% 
+  filter(valorLíquido > 0) %>%
+  summarise(contUsoCEAP = n(), dinheiroGasto = sum(valorLíquido)) %>% na.omit()
+
+plot_ly(depUsoCEAP, x =~contUsoCEAP, y =~reorder(sgPartido, contUsoCEAP),
+        marker = list(color = aqua)) %>%
+  layout(title = "Uso de CEAP por partido",
+         xaxis = list(title = "Quantidade de uso de CEAP"), 
+         yaxis = list(title ="Partido"))
+
+plot_ly(depUsoCEAP, x=~dinheiroGasto, y=~reorder(sgPartido, dinheiroGasto), 
+        marker = list(color = aqua)) %>%
+  layout(title="Dinheiro CEAP gasto por partido",
+         xaxis = list(title = 'Valor gasto (R$)'),
+         yaxis = list(title = 'Partido'))
+
+```
+
+
+Os gráficos acima listam os partidos que fazem uso da CEAP e os que gastam mais dinheiro usando a CEAP ordenados de forma decrescente. Em relação ao primeiro gráfico, nota-se que os 10 partidos que mais utilizam a CEAP são **PT, PMDB, PSDB, PP, PR, PSB, PSD, DEM, PDT** e **PRB**, enquanto que os partidos **PTdoB, PMN PRTB, PRP, PSL, PEN, REDE, PROS, AVANTE** e **PSOL** são os que menos utilizam a CEAP. 
+Sobre o segundo gráfico, percebe-se que os 10 partidos que mais gastaram dinheiro foram **PMDB, PT, PSDB, PP, PR PSD, PSB, DEM, PRB** e **PDT**, enquanto que os partidos **PTdoB, PMN, PRTB, PRP, PSL PEN, REDE, PSOL, AVANTE** e **PROS** foram os que obtiveram menos gastos. 
+
+
+**2. Quais os tipos de despesa mais comuns no uso da CEAP? Mesma pergunta considerando valores em R$.**
+
+```{r}
+knitr::opts_chunk$set(fig.height = 4)
+usoTipoDespesa <- dadosCEAP %>% group_by(tipoDespesa) %>%
+  filter(valorLíquido > 0) %>%
+  summarise(cont = n(), somaValor= sum(valorLíquido)) %>%
+  arrange(desc(cont)) %>%
+  na.omit()
+```
+
+```{r}
+plot_ly(usoTipoDespesa, x =~cont, y = ~reorder(tipoDespesa, cont),
+        marker = list(color = 'rgb(255, 153, 0, 0.6)')) %>%
+  layout(title= "Uso de CEAP por tipo de despesa",
+         xaxis = list(title = "Quantidade de uso de CEAP"), 
+         yaxis = list(title ="Tipo de Despesa"))
+
+plot_ly(usoTipoDespesa, x =~somaValor, y = ~reorder(tipoDespesa, somaValor), 
+        marker = list(color = 'rgb(255, 153, 0, 0.6)')) %>%
+  layout(title = "Dinheiro gasto por tipo de despesa",
+         xaxis = list(title = "Valor gasto (R$)"), 
+         yaxis = list(title ="Tipo de Despesa"))
+```
+
+
+Analisando os gráficos acima que listam os tipos de despesas mais usados e os que gastaram mais dinheiro com a CEAP, percebemos que os tipos de despesas mais com a CEAP são **Emissão de Bilhete Aéreo, COMBUSTÍVEIS E LUBRIFICANTES, TELEFONIA, SERVIÇOS POSTAIS** e **FORNECIMENTO DE ALIMENTAÇÃO DO PARLAMENTAR**, e as menos comuns são **PARTICIPAÇÃO EM CURSO, PALESTRA OU EVENTO SIMILAR, LOCAÇÃO OU FRETAMENTO DE EMBARCAÇÕES, ASSINATURA DE PUBLICAÇÕES** e **SERVIÇO DE SEGURANÇA PRESTADO POR EMPRESA ESPECIALIZADA**.
+
+
+**3. Levando em conta o estado pelo qual o deputado se elegeu, quais os estados que mais fazem uso da CEAP? Quais os que menos fazem uso? Mesmas perguntas considerando gastos em R$. Por que você acha isso?**
+
+```{r}
+usoEstado <- dadosCEAP %>% group_by(sgUF, idCadastro) %>%
+  filter(valorLíquido > 0) %>%
+  summarise(count = n(), mediana_valor = median(valorLíquido), 
+            mediana_uso = median(count)) %>% ungroup() %>%
+  arrange(desc(mediana_valor)) %>% na.omit()
+
+ggplot(usoEstado, aes(x = reorder(sgUF, -mediana_uso), y = mediana_uso)) +
+  geom_boxplot(outlier.colour = "red") +  xlab("Estado") + ylab("Uso") + ggtitle("Uso de CEAP por estado") + theme_bw()
+
+ggplot(usoEstado, aes(x = reorder(sgUF, -mediana_valor), y = mediana_valor)) + geom_boxplot(outlier.colour = "red") + xlab("Estado") + ylab("Valor gasto (R$)") + ggtitle("Ginheiro gasto por estado") + theme_bw()
+```
+
+
+Os estados que mais utilizam a CAEP são **Santa Catarina, Rio Grande do Sul, Minas Gerais, Paraná, São Paulo, Bahia, Pernambuco, Rio de Janeiro, Mato Grosso** e **Paraíba**; os que menos utilizam são **Distrito Federal, Amazonas, Maranhão, Amapá, Roraima, Piauí, Goiás, Acre, Alagoas** e **Sergipe**. 
+Em relação ao valor gasto, **Amazonas, Acre, Roraima, Sergipe, Mato Grosso do Sul, Amapá, Paraná, São Paulo, Piauí** e **Goiás** são os estados que mais gastam dinheiro da CEAP, enquanto que os que menos gastam são os estados de **Rio Grande do Sul, Santa Catarina, Minas Gerais, Bahia, Rio Grande do Norte, Distrito Federal, Alagoas, Espírito Santo, Pernambuco** e **Rondônia**. 
+
+Acredito que os resultados obtidos utilizando as medianas de contagem de uso da CEAP e de valor líquido são mais robustas e representam bem os dados, visto que estas não são afetadas por outliers.
+
+
+**4. Quais os parlamentares que mais gastam com CEAP e quais os que menos gastam?**
+
+```{r}
+usoParlamentar <- dadosCEAP %>% group_by(nomeParlamentar) %>%
+  filter(valorLíquido > 0) %>%
+  summarise(valorGasto = sum(valorLíquido)) %>% 
+  arrange(desc(valorGasto)) %>% na.omit() 
+```
+
+
+Os dados, por serem bastante numerosos, são difíceis de visualizar em um único gráfico, por isso foram feitos dois gráficos com os 10 parlamentares que mais gastam com a CEAP e os 10 que menos gastam.
+
+```{r}
+plot_ly(usoParlamentar %>% top_n(10), x =~valorGasto, y = ~reorder(nomeParlamentar, valorGasto),
+        marker = list(color = 'rgb(102, 204, 255, 1')) %>%
+  layout(title="Dinheiro gasto por parlamentar",
+         yaxis = list(title = "Parlamentar"), 
+         xaxis = list(title ="Valor gasto (R$)"))
+
+plot_ly(usoParlamentar %>% top_n(-10), x =~valorGasto, y = ~reorder(nomeParlamentar, -valorGasto), 
+        marker = list(color = 'rgb(102, 204, 255, 1')) %>%
+  layout(title="Dinheiro gasto por parlamentar",
+         yaxis = list(title = "Parlamentar"), 
+         xaxis = list(title ="Valor gasto (R$)"))
+```
+
+
+Podemos ver que os 10 parlamentares que mais gastam dinheiro são **Edio Lopes, Rocha, Abel Mesquita Jr., Alan Rick, Jhonatan de Jesus, Remídio Monai, Vinicius Gurgel, Felipe Bornier, Paes Landim** e **Pedro Fernandes**; e os parlamentares **Camilo Cola, Eliseu Padilha, Marcio Monteiro, Marcelo Almeida, Renan Filho, Henrique Oliveira, Cezar Silvestri, Ratinho Junior, Márcio França** e **Sebastião Oliveira** foram os que gastaram menos dinheiro da CEAP.
+
+
+**5. Existe correlação entre a quantidade de gastos no exterior e o valor restituído da CEAP?**
+
+**OBS:** Considerou-se viagens ao exterior as despesas tituladas como *Emissão de Bilhete Aéreo, Passagens aéreas e Passagens terrestres, marítimas ou fluviais*.
+
+```{r}
+viagensExterior <- c('Emissão Bilhete Aéreo', 'PASSAGENS AÉREAS', 'PASSAGENS TERRESTRES, MARÍTIMAS OU FLUVIAIS')
+
+contGastosExterior <- dadosCEAP %>% 
+  filter(tipoDespesa %in% viagensExterior, valorLíquido > 0) %>%
+  group_by(idCadastro) %>%
+  summarise(contGastoExterior = n())
+
+despesaCEAP <- dadosCEAP %>% group_by(idCadastro) %>% 
+  summarise(valorGastoTotal = mean(valorLíquido))
+
+rel <- inner_join(contGastosExterior, despesaCEAP, "idCadastro")
+
+ggplot(rel, aes(x = contGastoExterior, y = valorGastoTotal)) +
+    geom_point(shape = 1) +
+    geom_smooth(method = "lm") + 
+  labs(title = "Correlação entre gastos", x = "Quantidade de gastos no exterior", y = "Despesa total") + xlim(0, 1000) + theme_bw()
+```
+```{r}
+correlacao <- cor(rel$contGastoExterior, rel$valorGastoTotal)
+#[1] -0.3211757: Correlação negativa desprezível
+```
+
+
+##**BÔNUS**
+
+**1. Quais os estados cujos deputados gastam mais no exterior? Quais os estados cujos deputados gastam menos no exterior? **
+
+```{r}
+despesaExteriorPorEstado <- dadosCEAP %>% 
+  filter(tipoDespesa %in% viagensExterior, valorLíquido > 0) %>%
+  group_by(sgUF) %>%
+  summarise(valorGastoExteriorPorEstado = sum(valorLíquido)) %>%
+  arrange(desc(valorGastoExteriorPorEstado)) %>% na.omit()
+
+plot_ly(despesaExteriorPorEstado %>% top_n(10), 
+        x =~valorGastoExteriorPorEstado, y = ~reorder(sgUF,valorGastoExteriorPorEstado), 
+        marker = list(color = 'rgb(170, 128, 255, 1')) %>%
+  layout(title = "Valor gasto no exterior por parlamentar",
+         yaxis = list(title = "Estado"),
+         xaxis = list(title ="Valor gasto (R$)"))
+
+plot_ly(despesaExteriorPorEstado %>% top_n(-10), 
+        x =~valorGastoExteriorPorEstado, y = ~reorder(sgUF,-valorGastoExteriorPorEstado),
+        marker = list(color = 'rgb(170, 128, 255, 1')) %>%
+        layout(title = "Valor gasto no exterior por parlamentar",
+         yaxis = list(title = "Estado"),
+         xaxis = list(title ="Valor gasto (R$)"))
+
+```
+
+
+Os estados que mais gastam no exterior são **São Paulo, Rio de Janeiro, Minas Gerais, Rio Grande do Sul, Bahia, Paraná, Pernambuco, Ceará, Pará** e **Maranhão**; e os que menos gastam dinheiro no exterior são os estados de **Distrito Federal, Goiás, Tocantis, Amapá, Sergipe, Mato Grosso do Sul, Espírito Santo, Mato Grosso, Rio Grande do Norte** e **Rondônia**.
+
+
+**2. Quais os deputados que mais ultrapassam o limite de CEAP do seu estado?**
+
+```{r eval=FALSE}
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+```
+
+```{r include=FALSE}
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+```
+
+```{r}
+colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
+
+dados <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
+
+deputadosExcederamLimite <- dados %>% 
+  group_by(sgUF, nomeParlamentar, limite_mensal) %>%
+  summarise(valor = sum(valorLíquido)) %>% 
+  filter(valor > limite_mensal) %>%
+  arrange(desc(valor)) %>% na.omit()
+
+plot_ly(deputadosExcederamLimite %>% ungroup(limite_mensal) %>% top_n(10), x =~ valor-limite_mensal, y=~reorder(nomeParlamentar, (valor-limite_mensal)), color=~sgUF) %>%
+   layout(title = "TOP 10 Parlamentares que Excederam Limite Mensal",
+          yaxis = list(title = "Parlamentar"),
+          xaxis = list(title ="Valor gasto excedido (R$)"))
+
+
+```
+
+
+Os deputados que mais excederam o limite mensal do seu estado foram **Edio Lopes, Hiran Gonçalves, Jhonatan de Jesus, Vinicius Gurgel, Remídio Monai, Nilton Capixaba, Rocha, Alan Rick, Carlos Andrade** e **Silas Câmara**.
