@@ -5,10 +5,7 @@ date: "06 de novembro de 2017"
 output: html_document
 ---
 
-
-**1. Quais os partidos que mais fazem uso da CEAP? Quais os partidos que menos fazem uso? Mesmas perguntas conisderando valores em R$.**
-
-Inicialmente carregam-se os dados a serem analisados:
+Carregando os dados a serem analisados:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 library(dplyr)
@@ -42,21 +39,59 @@ dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
 colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
 dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
 ```
-**Perguntas: Deputados que gasta mais na PB, despesas, fornecedores, partidos, etc**
+
+**Pergunta 1: Como as despesas da CEAP estão destribuídas por partido no estado da Paraíba?**
+  Acredito que o partido mais gastador seja o PMDB, pois é o partido que possui mais deputados federais eleitos na Paraíba.
+
+
 
 ```{r}
-
-deputadosExcederamLimite <- dadosCEAP %>% 
-  group_by(nomeParlamentar, sgUF, sgPartido, fornecedor) %>%
+deputadosPB <- dadosCEAP %>% 
+  group_by(nomeParlamentar, sgUF, sgPartido) %>%
   summarise(valor = sum(valorLíquido)) %>% 
   filter(sgUF == "PB") %>%
   arrange(desc(valor)) %>% na.omit() %>% ungroup()
+```
 
-plot_ly(deputadosExcederamLimite %>% ungroup(limite_mensal) %>% top_n(10), x =~ valor-limite_mensal, y=~reorder(nomeParlamentar, (valor-limite_mensal)), color=~sgUF) %>%
-   layout(title = "TOP 10 Parlamentares que Excederam Limite Mensal",
-          yaxis = list(title = "Parlamentar"),
-          xaxis = list(title ="Valor gasto excedido (R$)"))
+```{r}
+  gastosPorPartido <- deputadosPB %>% group_by(sgPartido) %>% summarise(n = sum(valor), numDept = n())
 
+  plot_ly(gastosPorPartido, y =~ n, x=~reorder(numDept, numDept), color=~sgPartido) %>%
+   layout(title = "Partidos mais gastadores por número de deputados eleitos na Paraíba",
+          xaxis = list(title = "Número de Parlamentares Por Partido"),
+          yaxis = list(title ="Valor gasto (R$)"))
+```
+
+**Pergunta 2: Como as despesas estão destribuídas entre os parlamentares do estado da Paraíba?**
+  Dependendo de como o valor gasto por partido esteja distribuído, há chances de o parlamentar mais gastador ser um dos eleitos do partido PMDB. Caso a distribuição esteja bem igualitária, então o deputado que gastou mais é o eleito pelo 2º partido mais gastador e que possui apenas um eleito: Rômulo Gouveia, do PSD. 
+  
+  
+```{r}
+ gastosPorDeputado <- deputadosPB %>% group_by(nomeParlamentar, valor, sgPartido) 
+
+  plot_ly(gastosPorDeputado, y =~ valor, x=~reorder(nomeParlamentar, -valor), color=~sgPartido) %>%
+   layout(title = "Parlamentares mais gastadores da Paraíba",
+          xaxis = list(title = "Parlamentar"),
+          yaxis = list(title ="Valor gasto (R$)"))
+```
+
+  
+**Pergunta 3: Como as despesas do deputado mais gastador estão distribuídas?**
+    Acredito que as maiores despesas da CEAP sejam com passagens aéreas e divulgação da atividade parlamentar, 
+  visto que estas são as despesas que possuem maior custo. As menores despesas acredito que sejam com alimentação do deputado e
+  serviços postais, pois se tratam se despesas de menor custo.
+
+```{r}
+despesasRomuloGouveia <- dadosCEAP %>% 
+  group_by(nomeParlamentar, tipoDespesa) %>%
+  summarise(valor = sum(valorLíquido)) %>% 
+  filter(nomeParlamentar == "RÔMULO GOUVEIA") %>%
+  arrange(desc(valor)) %>% na.omit() %>% ungroup()
+
+plot_ly(despesasRomuloGouveia, y =~ valor, x=~reorder(tipoDespesa, valor), color=~tipoDespesa) %>%
+   layout(title = "Despesas gastas pelo deputado Rômulo Gouveia",
+          xaxis = list(title = "Parlamentar"),
+          yaxis = list(title ="Valor gasto (R$)"))
 
 ```
 
