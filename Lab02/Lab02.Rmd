@@ -40,33 +40,48 @@ colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
 dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
 ```
 
-**Pergunta 1: Como as despesas da CEAP estão destribuídas por partido no estado da Paraíba?**
+**Pergunta 1: Como as despesas da CEAP estão distribuídas por partido no estado da Paraíba?**
   Acredito que o partido mais gastador seja o PMDB, pois é o partido que possui mais deputados federais eleitos na Paraíba.
-
-
 
 ```{r}
 deputadosPB <- dadosCEAP %>% 
-  group_by(nomeParlamentar, sgUF, sgPartido) %>%
-  summarise(valor = sum(valorLíquido)) %>% 
-  filter(sgUF == "PB") %>%
-  arrange(desc(valor)) %>% na.omit() %>% ungroup()
+  group_by(nomeParlamentar, sgUF, sgPartido, valorLíquido, tipoDespesa) %>%
+  filter(sgUF == "PB", valorLíquido > 0) %>%
+  arrange(desc(valorLíquido)) %>% na.omit() %>% ungroup()
 ```
 
 ```{r}
-  gastosPorPartido <- deputadosPB %>% group_by(sgPartido) %>% summarise(n = sum(valor), numDept = n())
+  gastosPorPartido <- deputadosPB %>% group_by(nomeParlamentar, sgPartido) %>%
+    summarise(mediana_valor = median(valorLíquido)) %>%
+    ungroup() %>%
+    arrange(desc(mediana_valor)) %>% na.omit()
 
-  plot_ly(gastosPorPartido, y =~ n, x=~reorder(numDept, numDept), color=~sgPartido) %>%
-   layout(title = "Partidos mais gastadores por número de deputados eleitos na Paraíba",
-          xaxis = list(title = "Número de Parlamentares Por Partido"),
+  bp1 <- ggplot(gastosPorPartido, aes(x = reorder(sgPartido, -mediana_valor), y = mediana_valor), fill=sgPartido) +
+  geom_boxplot(outlier.colour = "red", outlier.color = "pink") +  xlab("Estado") + ylab("Uso") + ggtitle("Distribuição das despesas por partido na Paraíba") + theme_bw() + ylim(0, 800)
+  
+  ggplotly(bp1)
+```
+
+    Após a análise da distribuição do valor gasto por partido disponível no gráfico acima, percebe-se que o partido **PSDB** possui o deputado mais gastador, pois contém a maior mediana em relação aos outros partidos. 
+
+**Pergunta 2: Como as despesas estão distribuídas entre os parlamentares do estado da Paraíba?**
+
+    Acredito que as maiores despesas da CEAP sejam com passagens aéreas e divulgação da atividade parlamentar, visto que estas são as despesas que possuem maior custo. As menores despesas acredito que sejam com alimentação do deputado e serviços postais, pois se tratam se despesas de menor custo.
+    
+    
+  
+```{r}
+despesasDeputados <- deputadosPB %>% 
+  group_by(nomeParlamentar, tipoDespesa) %>%
+  summarise(valor = sum(valorLíquido)) %>% 
+  arrange(desc(valor)) %>% na.omit() %>% ungroup()
+
+plot_ly(despesasRomuloGouveia, y =~ valor, x=~reorder(tipoDespesa, valor), color=~tipoDespesa) %>%
+   layout(title = "Despesas gastas pelo deputado Rômulo Gouveia",
+          xaxis = list(title = "Parlamentar"),
           yaxis = list(title ="Valor gasto (R$)"))
 ```
 
-**Pergunta 2: Como as despesas estão destribuídas entre os parlamentares do estado da Paraíba?**
-  Dependendo de como o valor gasto por partido esteja distribuído, há chances de o parlamentar mais gastador ser um dos eleitos do partido PMDB. Caso a distribuição esteja bem igualitária, então o deputado que gastou mais é o eleito pelo 2º partido mais gastador e que possui apenas um eleito: Rômulo Gouveia, do PSD. 
-  
-  
-```{r}
  gastosPorDeputado <- deputadosPB %>% group_by(nomeParlamentar, valor, sgPartido) 
 
   plot_ly(gastosPorDeputado, y =~ valor, x=~reorder(nomeParlamentar, -valor), color=~sgPartido) %>%
@@ -77,9 +92,7 @@ deputadosPB <- dadosCEAP %>%
 
   
 **Pergunta 3: Como as despesas do deputado mais gastador estão distribuídas?**
-    Acredito que as maiores despesas da CEAP sejam com passagens aéreas e divulgação da atividade parlamentar, 
-  visto que estas são as despesas que possuem maior custo. As menores despesas acredito que sejam com alimentação do deputado e
-  serviços postais, pois se tratam se despesas de menor custo.
+    
 
 ```{r}
 despesasRomuloGouveia <- dadosCEAP %>% 
