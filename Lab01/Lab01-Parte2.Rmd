@@ -1,0 +1,101 @@
+---
+title: "Lab02: Análise de Gastos de Deputados"
+author: "Hadrizia Santos"
+date: "06 de novembro de 2017"
+output: html_document
+---
+
+Carregando os dados a serem analisados:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(readr)
+library(gridExtra)
+library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE)) 
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
+dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
+
+```
+
+```{r eval = FALSE}
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(readr)
+library(gridExtra)
+library(plotly)
+aqua <- 'rgba(61, 217, 219, 1)'
+dadosCEAP <- read_csv("~/Downloads/dadosCEAP.csv")
+dadosCEAP$valorGlosa <- as.numeric(sub(",", ".", dadosCEAP$valorGlosa, fixed = TRUE))
+dadosLimiteCEAP <- read_csv("~/Downloads/limiteMensalCEAP.csv")
+colnames(dadosLimiteCEAP)[colnames(dadosLimiteCEAP) == 'UF'] <- 'sgUF'
+dadosCEAP <- inner_join(dadosCEAP, dadosLimiteCEAP, "sgUF")
+```
+
+
+**Pergunta 1: Como as despesas da CEAP estão distribuídas por partido no estado da Paraíba?**
+  
+  Acredito que o partido mais gastador seja o PMDB, pois é o partido que possui mais deputados federais eleitos na Paraíba.
+
+
+```{r}
+  gastosPorPartido <- dadosCEAP %>% group_by(nomeParlamentar, sgPartido, sgUF) %>% summarise(mediana_valor = median(valorLíquido)) %>%
+  ungroup() %>%
+  filter(sgUF == "PB") %>%
+  arrange(desc(mediana_valor)) %>% na.omit()
+
+  bp1 <- ggplot(gastosPorPartido, aes(x = reorder(sgPartido, -mediana_valor), y = mediana_valor)) +
+  geom_boxplot(outlier.colour = "red") +  xlab("Estado") + ylab("Valor Gasto (R$)") + ggtitle("Distribuição das despesas por partido na Paraíba") + theme_bw() + ylim(0, 800)
+  
+  ggplotly(bp1)
+```
+  
+  Após a análise da distribuição do valor gasto por partido disponível no gráfico acima, percebe-se que o partido **PSDB** possui o deputado mais gastador, pois contém a maior mediana em relação aos outros partidos. 
+
+**Pergunta 2: Como as despesas estão distribuídas entre os parlamentares do estado da Paraíba?**
+
+  Acredito que as maiores despesas dos deputados são as passagens de avião e a divulgação do parlamentar, dado que estes possuem valores mais altos quando comparados às outras despesas, além do que os deputados precisam se locomover para reuniões em Brasília. As menores despesas seriam com alimentação e serviços postais, por possuírem menor custo.
+    
+```{r}
+despesas <- dadosCEAP %>% group_by(nomeParlamentar, tipoDespesa, sgUF) %>%   filter(sgUF == "PB") %>%
+  summarise(cont = sum(valorLíquido))
+
+plot_ly(despesas, x = ~reorder(tipoDespesa,-cont), y=~cont, type = 'bar') %>%
+  layout(title = "Distribuição de despesas dos deputados na Paraíba",
+          xaxis = list(title = "Tipo de Despesa"),
+          yaxis = list(title ="Valor gasto (R$)"))
+```
+    
+  Como pode-se ver no gráfico, as maiores despesas são do tipo **Divulgação da Atividade Parlamentar** e **Emissão de Bilhete Aéreo**, o que pode ser explicado pelo fato de que os deputados precisam divulgar uma boa imagem para a população. as menores despesas são com **Segurança** e **Serviço de táxi, pedágio e estacionamento**.
+    
+ 
+**Pergunta 3: Como os fornecedores do deputado mais gastador estão distribuídos?**
+
+  Acredito que os fornecedores favoritos do deputado seja os divulgadores da atividade parlamentar e as companhias de vôo, já que algumas viagens são necessárias para reuniões em Brasília.
+
+```{r}
+despesasRuyCarneiro <- dadosCEAP %>% 
+  group_by(nomeParlamentar, tipoDespesa, fornecedor, valorLíquido) %>%
+  filter(nomeParlamentar == "RUY CARNEIRO") %>%
+  summarise(v = sum(valorLíquido)) %>%
+  na.omit() %>% ungroup()
+
+
+plot_ly(despesasRuyCarneiro, y =~ valorLíquido, x=~reorder(fornecedor, -valorLíquido), color=~tipoDespesa) %>%
+   layout(title = "Fornecedores favoritos do deputado Ruy Carneiro",
+          xaxis = list(title = "Fornecedor"),
+          yaxis = list(title ="Valor gasto (R$)"))
+
+```
+
+  Analisando o gráfico acima, percebe-se que os fornecedores favoritos do deputado Ruy Carneiro são **Comunicação e Marketing LTDA** e **Josely Fernanda do Nascimento**. 
+  
+
