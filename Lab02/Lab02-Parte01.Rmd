@@ -44,12 +44,14 @@ Problema de falta de dados resolvidos, iremos agora responder às perguntas.
 
 **1. Um modelo de regressão múltipla com todas as variáveis é plausível para explicar a variação em y (número de votos)? Justifique sua resposta.**
 
-  Para responder a esta pergunta, iremos observar, fazendo o modelo de regressão múltipla entre as variáveis (com exceção de nome, id, número e estado civil do candidato) e a quantidade de votos, o valor p (probabilidade da correlação ser aleatória) e r² (porcentagem do quanto o modelo explica a quantidade de votos).
+  Para responder a esta pergunta, iremos observar, fazendo o modelo de regressão múltipla entre as variáveis e a quantidade de votos, o valor p (probabilidade da correlação ser aleatória) e r² (porcentagem do quanto o modelo explica a quantidade de votos). 
+  Por conter inúmeras variáveis categóricas o modelo ficou bastante extenso, então foram excluídas as variáveis que obtiveram p-valor maior que 0,05 (indicando que a probabilidade da causalidade entre a variável e a quantidade de votos ser aleatória é grande).
+  A variável categórica UF é uma boa variável candidata de predição, pois a maioria dos seus níveis possuem p-valor baixo. Além dela, algumas variáveis possuem alguns níveis preditores, como partido e sexo (maculino, p-value = 0.060945).
 
 ```{r}
-input <- eleicoes2014 %>% select(-cargo, -nome, -estado_civil, -sequencial_candidato, -numero_cadidato, -idade, -grau)
+input <- eleicoes2014 %>% select(-cargo, -nome, -grau, -estado_civil, -sequencial_candidato, -numero_cadidato, -idade, -setor_economico_despesa, -setor_economico_receita) 
 voto.model<- lm(formula = votos ~ ., input, na.action = na.omit)
 summary(voto.model)
 ```
-
-  É possível ver que os resultados obtidos são bastante numerosos e a maioria destes possui p valor acima de nos resultados acima, existem várias 
+  
+  Observando o resultado acima, percebemos que as variáveis candidatas selecionadas inicialmente são boas preditoras. 
