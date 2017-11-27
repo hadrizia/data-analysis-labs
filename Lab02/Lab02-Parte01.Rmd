@@ -15,7 +15,9 @@ library(dplyr)
 library(readr)
 library(Amelia)
 library(leaps)
-library(plotly)
+library(ggplot2)
+library(tidyr)
+#library(corrgram)
 
 eleicoes2014 <- read.csv("~/Downloads/eleicoes2014.csv", encoding = "latin1")
 ```
@@ -93,11 +95,16 @@ summary(voto.model)
   Precisamos selecionar as melhores variáveis de predição e eliminar as que não predizem y (quantidade de votos). Para isso, utiliza-se um pacote do R chamado *leaps* que procura o melhor subconjunto das variáveis em x que predizem y.
   
 ```{r}
+
+#corrgram(input, order=TRUE, lower.panel=panel.shade,
+#  upper.panel=panel.pie, text.panel=panel.txt,
+#  main="Correlograma das variáveis")
+
 regsubconj <-
     regsubsets(votos ~ .,
                data = input,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
+               nbest = 1,       # seleciona um melhor modelo para cada numero de preditores
+               nvmax = NULL,    # Sem limites de variaveis
                force.in = NULL, force.out = NULL,
                method = "exhaustive",
                really.big = T)
@@ -105,7 +112,10 @@ regsubconj <-
 summary_regsubconj <- summary(regsubconj)
 summary_regsubconj
 ```
-  O resultado é o melhor modelo de subconjuntos de todo tamanho começando em 1 variável até 15, que é o número total de variáveis. A seguir precisamos saber qual é o melhor modelo entre estes e o critério de escolha será o R² ajustado, que define o quanto as variáveis explicam os votos.
+
+  O resultado é o melhor modelo de subconjuntos de todo tamanho começando em 1 variável até 15, que é o número total de variáveis. A seguir precisamos saber qual é o melhor modelo entre estes e o critério de escolha será o R² ajustado, que define o quanto as variáveis 
+explicam os votos.
+
 ```{r}
 
 melhor_modelo <- which.max(summary_regsubconj$adjr2)
@@ -113,7 +123,9 @@ melhor_modelo
 
 ```
 
-  A função acima procura, entre todos os modelos dos subconjuntos das variáveis, qual o modelo que possui maior R² ajustado (nesse caso, foi o modelo com todas as variáveis). Observaremos que não existe variável redundante:
+  A função acima procura, entre todos os modelos dos subconjuntos das variáveis, qual o modelo que possui maior R² ajustado (nesse caso, 
+foi o modelo com todas as variáveis). Observaremos que não existe variável redundante:
+
 ```{r}
 
 summary_regsubconj$which[melhor_modelo,]
@@ -130,9 +142,14 @@ summary_regsubconj$which[melhor_modelo,]
 
 ```{r}
 
-ggplot(voto.model, aes(x = .fitted, y = .resid)) + geom_point(color = "#56B4E9")
+ggplot(voto.model, aes(x = .fitted, y = .resid)) + 
+  geom_point(color = "#56B4E9") + 
+  xlab("Fitted") + 
+  ylab("Residuals")
 
 ```
+  Observando o gráfico, percebemos que os resíduos são assimétrico e possuem um padrão de comportamento (não são aleatórios). Isto indica que o modelo não é ideal e que faltam transformações ou interações entre as variáveis, que serão feitas nos próximos labs.
 
 **5. Quais variáveis conseguem explicar melhor o número de votos? Justifique sua resposta.**
-*TODO*
+  
+  *TODO*
