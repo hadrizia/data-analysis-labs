@@ -28,7 +28,7 @@ eleicoes2014 <- read.csv("~/Downloads/eleicoes2014.csv", encoding = "latin1")
  missmap(eleicoes2014)
 ```
 
-  Através do gráfico acima, percebemos que faltam muitos dados nas colunas recursos_de_pessoas_juridicas, recursos_de_partidos, recursos_proprios, recursos_de_outros_candidatos.comites e recursos_de_pessoas_físicas. A abordagem utilizada para lidar com esta falta de dados é **preenchê-los com a média de cada coluna**:
+  Através do gráfico acima, percebemos que faltam muitos dados nas colunas recursos_de_pessoas_juridicas, recursos_de_partidos, recursos_proprios, recursos_de_outros_candidatos.comites e recursos_de_pessoas_físicas. A abordagem utilizada para lidar com esta falta de dados é **preenchê-los com a mediana de cada coluna**:
 
 ```{r}
 # Setando valores  NA para a média dos valores da coluna recursos_de_pessoas_juridicas
@@ -52,34 +52,18 @@ Problema de falta de dados resolvidos, iremos agora responder às perguntas.
 **1. Um modelo de regressão múltipla com todas as variáveis é plausível para explicar a variação em y (número de votos)? Justifique sua resposta.**
 
   Por conter inúmeras variáveis categóricas o modelo ficou bastante extenso, dificultando a visualização. Foram excluídas as variáveis que obtiveram p-valor maior que 0,05, indicando que a probabilidade da causalidade entre a variável e a quantidade de votos ser aleatória é grande (não são boas preditoras para a quantidade de votos).
-  A variável categórica UF é uma boa variável de predição, pois a maioria dos seus níveis possuem p-valor baixo. Além dela, algumas variáveis possuem alguns níveis que são preditores, como partido e sexo, setor econômico receita e de despesa. 
-  Para o caso das variáveis partido e UF, que possuem vários níveis preditores, estas irão prevalecer no modelo categorizadas por nível de predição: os que possuem melhor predição (p-valor entre 0 e 0.001) possuem valor 3, os que possuem média predição (p-valor entre 0.001 e 0.01) terão valor 2, os que tem baixa predição (p-valor entre 0.01 e 0.05), valor 1 e 0, caso nao possuam (p-valor > 0.05).
-  No caso de sexo, que apenas um nível tem p-valor baixo, a coluna sexo será removida do modelo e cria-se uma nova coluna isMasculino, tendo valor 1 para candidatos do sexo masculino e 0 para as candidatas. Para as variáveis setor econômico de receita e de despesa, como o número de níveis preditores é muito inferior ao número total de níveis, ambas serão excluídas do modelo de regressão atual. 
   
 ```{r}
-# Criando uma coluna isMasculino, onde cada linha terá valor 1 se o candidato for homem ou 0, caso for mulher.
-input <- eleicoes2014 %>% mutate(isMasculino = ifelse(sexo == 'MASCULINO', 1, ifelse(sexo == 'FEMININO', 0, 0)))
-
-#Criando listas dos estados que possuem alguma predição
-UFMelhorPreditora <- c('BA', 'CE', 'MA', 'PA', 'PB', 'PE', 'RN', 'SC')
-UFMediaPreditora <- c('MG', 'PR', 'RJ', 'RS', 'SE', 'SP')
-UFBaixaPreditora <- c('AL', 'AM', 'ES', 'GO', 'PI')
-
-#Criando coluna UFNivelPredicao com valor 3, 2 ou 1:
-input <- eleicoes2014 %>% mutate(UFNivelPredicao = ifelse(UF %in% UFMelhorPreditora, 3, ifelse(UF %in% UFMediaPreditora, 2, ifelse(UF %in% UFBaixaPreditora, 1, 0))))
-
-#Criando lista de níveis de predição para partido:
-PartidoMediaPredicao <- c('PDT')
-PartidoBaixaPredicao <- c('PC do B','PEN','PSB','PSL', 'PT', 'PTC', 'PV')
-
-input <- input %>% mutate(PartidoPredicao = ifelse(setor_economico_receita == 'Comércio atacadista de produtos alimentícios em geral', 1, 0)) 
-
+input <- eleicoes2014
+input$UF <- as.numeric(input$UF)
+input$sexo <- as.numeric(input$sexo)
+input$partido <- as.numeric(input$partido)
 ```
   
   Concluindo as adaptações, agora cria-se o modelo de regressão:
 
 ```{r}
-input <- input %>% select(-cargo, -nome, -grau, -sexo, -estado_civil, -sequencial_candidato, -numero_cadidato, -idade, -setor_economico_receita, -setor_economico_despesa, -UF, -partido)
+input <- input %>% select(-cargo, -nome, -grau, -estado_civil, -sequencial_candidato, -numero_cadidato, -idade, -setor_economico_receita, -setor_economico_despesa, -UF, -partido, -quantidade_doacoes)
 
 voto.model <- lm(formula = votos ~ ., input, na.action = na.omit)
 
@@ -91,32 +75,32 @@ summary(voto.model)
   Precisamos selecionar as melhores variáveis de predição e eliminar as que não predizem y (quantidade de votos) e/ou são redundantes para o modelo. Para isso, utiliza-se um pacote do R chamado *corrplot* que exibe a correlação entre cada variável.
   
 ```{r}
-corr = cor(input[, 1:16])
+corr = cor(input[, 1:14])
 round(corr, 2)
 
 corrplot(corr, method="circle")
 ```
 
-  O resultado é um correlograma das variáveis. Podemos ver que o modelo possui algumas variáveis redundantes pois algumas possuem correlação muito forte, como total_despesa e total_receita (0.99), quantidade_fornecedores e quantidade_despesas (0.93), quantidade_doacoes e quantidade_doadores (0.86), recursos_de_partidos e total_receita/total_despesa (0.82) recursos_de_pessoas_juridicas e total_receita/total_despesa (0.80), quantidade_despesas e total_receita/total_despesa (0.81). As variáveis **total_receita, total_despesa ** e **quantidade_despesas** serão removidas do modelo.
+  O resultado é um correlograma das variáveis. Podemos ver que o modelo possui algumas variáveis redundantes pois algumas possuem correlação muito forte, como a variável total_receita com total_despesa (0.99), com recursos_de_partidos (0.82), com recursos_de_pessoas_juridicas (0.80), com quantidade_despesas (0.81). A variável **total_receita**, por ser extremamente redudante, será removida do modelo.
   
 **3. No caso de haver variáveis pouco explicativas e/ou redudantes, construa um novo modelo sem essas variáveis e o compare ao modelo com todas as variáveis (e.g. em termos de R2 e RSE).**
 
 ```{r}
-input <- input %>% select(-total_receita, -total_despesa, -quantidade_despesas)
+input <- input %>% select(-total_despesa)
 
 voto.model <- lm(formula = votos ~ ., input, na.action = na.omit)
 
 summary(voto.model)
 ```
   
-  O modelo anterior considerando algumas das variáveis possui RSE = 32.180 e R² ajustado = 0.4949, enquanto que este apresentou RSE = 33.150 e R² ajustado = 0.464. Acredito que, apesar dos erros terem aumentado e o R² diminuído, takvez o modelo se adeque bem à generalização e não apenas ao conjunto de treino.
-  
+  O modelo anterior considerando algumas das variáveis possui RSE = 32.470 e R² ajustado = 0.4857, enquanto que este apresentou RSE = 32.530 e R² ajustado = 0.4841. Acredito que, considerando que a taxa de aumento de erro e de diminuição do R² ajustado foi baixa, então a retirada da variável total_despesa não acarretou em mudanças muito drásticas no modelo.
+
 **4. Analise plots de resíduos e verifique se há tendências nos erros.**
 
 ```{r}
-ggplot(voto.model, aes(x = .fitted, y = .resid)) + 
+ggplot(voto.model, aes(x = predict(voto.model), y = residuals(voto.model))) + 
   geom_point(color = "#56B4E9") + 
-  xlab("Fitted") + 
+  xlab("Predict") + 
   ylab("Residuals")
 ```
   
@@ -151,5 +135,5 @@ melhor_modelo
 ```{r}
 summary_regsubconj$which[melhor_modelo,]
 ```
-  Como se pode ver acima, todas as variáveis são boas preditoras.
+  Como se pode ver acima, todas as variáveis preditoras.
   
