@@ -136,4 +136,8 @@ melhor_modelo
 summary_regsubconj$which[melhor_modelo,]
 ```
   Como se pode ver acima, todas as variáveis preditoras.
+**Exportando os dados para serem utilizados futuramente:**  
+```{r}
+write.csv(input, 'input_eleicoes2014.csv', row.names=FALSE)
+```
   

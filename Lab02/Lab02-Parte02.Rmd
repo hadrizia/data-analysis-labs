@@ -1,0 +1,84 @@
+---
+title: "Lab02 - Predição de Votação de Deputados"
+author: "Hadrizia Santos"
+date: "11 de dezembro de 2017"
+output: html_document
+---
+
+**Carregando bibliotecas necessárias**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(readr)
+library(caret)
+```
+
+**Carregando os dados e removendo informações pouco relevantes, como nome, cargo, número e sequencial do candidato**
+
+```{r}
+input <- read.csv("~/Downloads/eleicoes2014.csv", encoding = "latin1")
+  input <- input %>% select(-cargo, -nome, -sequencial_candidato, -numero_cadidato)
+
+## Setando os valores NA para zero
+input[is.na(input)] <- 0
+
+## gerando partição de 75% dos dados
+smp_size <- floor(0.75 * nrow(input))
+
+## Setando a seed para fazer a partição reproduzível
+set.seed(123)
+
+## Particionando o dataset em dois: treino (75%) e teste (25%)
+train_ind <- sample(seq_len(nrow(input)), size = smp_size)
+train <- input[train_ind, ]
+test <- input[-train_ind, ]
+```
+
+**1. Usando todas as variáveis disponíveis, tune (usando validação cruzada): (i) um modelo de regressão Ridge, (ii) um modelo de regressão Lasso e (iii) um modelo KNN. Para os modelos de regressão linear, o parâmetro a ser tunado é o lambda (penalização dos coeficientes) e o KNN o número de vizinhos. (9 pts.)**
+
+Usando validação cruzada 
+
+```{r}
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 5,
+                           repeats = 5,
+                           search = "random")
+
+preProcValues <- c("center", "scale", "nzv")
+
+```
+
+
+(i) O modelo de regressão Ridge
+
+```{r}
+model.ridge <- train(votos ~ ., 
+               data = train,
+               trControl = fitControl,
+               method = "ridge",
+               preProcess = preProcValues)
+model.ridge
+```
+
+(ii) O modelo de regressão Lasso
+
+```{r}
+model.lasso <- train(votos ~ .,
+                     data = train,
+                     trControl = fitControl,
+                     method = "lasso",
+                     preProcess = preProcValues)
+model.lasso
+```
+
+(iii) O modelo KNN
+
+```{r}
+
+model.knn <- train(votos ~ .,
+                   data = train,
+                   method = "knn",
+                   preProcess = preProcValues)
+model.knn
+```
+
