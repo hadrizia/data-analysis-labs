@@ -11,13 +11,14 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 library(readr)
 library(caret)
+library(dplyr)
 ```
 
 **Carregando os dados e removendo informações pouco relevantes, como nome, cargo, número e sequencial do candidato**
 
 ```{r}
 input <- read.csv("~/Downloads/eleicoes2014.csv", encoding = "latin1")
-  input <- input %>% select(-cargo, -nome, -sequencial_candidato, -numero_cadidato)
+  input <- input %>% select(-cargo)
 
 ## Setando os valores NA para zero
 input[is.na(input)] <- 0
@@ -32,22 +33,38 @@ set.seed(123)
 train_ind <- sample(seq_len(nrow(input)), size = smp_size)
 train <- input[train_ind, ]
 test <- input[-train_ind, ]
+
+polyexp = function(df){
+  df.polyexp = df
+  colnames = colnames(df)
+  for (i in 1:ncol(df)){
+    for (j in i:ncol(df)){
+      colnames = c(colnames, paste0(names(df)[i],'.',names(df)[j]))
+      df.polyexp = cbind(df.polyexp, df[,i]*df[,j])
+    }
+  }
+  names(df.polyexp) = colnames
+  return(df.polyexp)
+}
+
+polyexp(train)
+
 ```
 
-**1. Usando todas as variáveis disponíveis, tune (usando validação cruzada): (i) um modelo de regressão Ridge, (ii) um modelo de regressão Lasso e (iii) um modelo KNN. Para os modelos de regressão linear, o parâmetro a ser tunado é o lambda (penalização dos coeficientes) e o KNN o número de vizinhos. (9 pts.)**
-
+**1. Usando todas as variáveis disponíveis, tune (usando validação cruzada): (i) um modelo de regressão Ridge, (ii) um modelo de regressão Lasso e (iii) um modelo KNN. Para os modelos de regressão linear, o parâmetro a ser tunado é o lambda (penalização dos coeficientes) e o KNN o número de vizinhos.**
+    ''
 Usando validação cruzada 
 
 ```{r}
 fitControl <- trainControl(method = "repeatedcv",
-                           number = 5,
                            repeats = 5,
                            search = "random")
+
+testeControl <- trainControl(method = "gaussprPoly")
 
 preProcValues <- c("center", "scale", "nzv")
 
 ```
-
 
 (i) O modelo de regressão Ridge
 
@@ -56,7 +73,8 @@ model.ridge <- train(votos ~ .,
                data = train,
                trControl = fitControl,
                method = "ridge",
-               preProcess = preProcValues)
+               preProcess = preProcValues,
+               tuneLength = 5)
 model.ridge
 ```
 
@@ -67,7 +85,8 @@ model.lasso <- train(votos ~ .,
                      data = train,
                      trControl = fitControl,
                      method = "lasso",
-                     preProcess = preProcValues)
+                     preProcess = preProcValues,
+                     tuneLength = 5)
 model.lasso
 ```
 
@@ -78,7 +97,22 @@ model.lasso
 model.knn <- train(votos ~ .,
                    data = train,
                    method = "knn",
-                   preProcess = preProcValues)
+                   preProcess = preProcValues,
+                   tuneLength = 5)
 model.knn
+```
+
+**2. Compare os três modelos em termos do erro RMSE de validação cruzada.**
+
+  Utilizando validação cruzada, temos os seguintes resultados: no modelo de regressão Ridge, o menor RMSE é 34107.36 quando lambda = 0.00104874; o modelo Lasso possui menor RSME igual a 34168.80 quando a fração é 0.4495589; o modelo KNN possui RMSE igual a 34395.36 quando possui número de vizinhos é k = 13.
+
+
+**3. Quais as variáveis mais importantes segundo o modelo de regressão Ridge e Lasso?  Variáveis foram descartadas pelo Lasso? Quais?**
+
+```{r}
+ggplot(varImp(model.ridge))
+```
+```{r}
+ggplot(varImp(model.lasso))
 ```
 
