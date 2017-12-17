@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 library(readr)
 library(caret)
 library(dplyr)
+library(ggplot2)
 ```
 
 **Carregando os dados e removendo informações pouco relevantes, como nome, cargo, número e sequencial do candidato**
@@ -30,37 +31,30 @@ smp_size <- floor(0.75 * nrow(input))
 set.seed(123)
 
 ## Particionando o dataset em dois: treino (75%) e teste (25%)
-train_ind <- sample(seq_len(nrow(input)), size = smp_size)
-train <- input[train_ind, ]
-test <- input[-train_ind, ]
+#train_ind <- sample(seq_len(nrow(input)), size = smp_size)
+#train <- input[train_ind, ]
+#test <- input[-train_ind, ]
 
-polyexp = function(df){
-  df.polyexp = df
-  colnames = colnames(df)
-  for (i in 1:ncol(df)){
-    for (j in i:ncol(df)){
-      colnames = c(colnames, paste0(names(df)[i],'.',names(df)[j]))
-      df.polyexp = cbind(df.polyexp, df[,i]*df[,j])
-    }
-  }
-  names(df.polyexp) = colnames
-  return(df.polyexp)
-}
+#___USANDO TRAIN E TEST DO KAGGLE___
+train <- read.csv("~/Downloads/train.csv", encoding = "latin1")
+train <- train %>% select(-cargo, -nome, -numero_cadidato)
+train[is.na(train)] <- 0
 
-polyexp(train)
-
+test <- read.csv("~/Downloads/test.csv", encoding = "latin1")
+ID <-test %>% select(ID)
+test <- test %>% select(-cargo, -nome, -numero_cadidato)
+test[is.na(test)] <- 0
 ```
 
 **1. Usando todas as variáveis disponíveis, tune (usando validação cruzada): (i) um modelo de regressão Ridge, (ii) um modelo de regressão Lasso e (iii) um modelo KNN. Para os modelos de regressão linear, o parâmetro a ser tunado é o lambda (penalização dos coeficientes) e o KNN o número de vizinhos.**
-    ''
+    
 Usando validação cruzada 
 
 ```{r}
 fitControl <- trainControl(method = "repeatedcv",
+                           number = 5,
                            repeats = 5,
                            search = "random")
-
-testeControl <- trainControl(method = "gaussprPoly")
 
 preProcValues <- c("center", "scale", "nzv")
 
@@ -68,51 +62,194 @@ preProcValues <- c("center", "scale", "nzv")
 
 (i) O modelo de regressão Ridge
 
-```{r}
+```{r eval = FALSE}
 model.ridge <- train(votos ~ ., 
                data = train,
                trControl = fitControl,
                method = "ridge",
                preProcess = preProcValues,
-               tuneLength = 5)
+               tuneLength = 15)
 model.ridge
+
+```
+```{r}
+# Ridge Regression 
+
+# 4152 samples
+# 22 predictors
+
+# Pre-processing: centered (35), scaled (35), remove (190) 
+# Resampling: Cross-Validated (5 fold, repeated 5 times) 
+# Summary of sample sizes: 3322, 3320, 3323, 3322, 3321, 3321, ... 
+# Resampling results across tuning parameters:
+
+#   lambda        RMSE      Rsquared   MAE     
+#   1.203441e-05  33563.95  0.4629227  12264.07
+#   3.284396e-04  33500.11  0.4648003  12242.41
+#   6.310562e-04  33477.98  0.4654826  12238.00
+#   2.476221e-03  33409.89  0.4673458  12222.95
+#   6.486648e-03  33353.93  0.4685108  12209.90
+#   2.632235e-02  33267.62  0.4706830  12207.18
+#   3.342439e-02  33260.16  0.4711649  12211.28
+#   3.969656e-02  33258.53  0.4715324  12216.80
+#   4.200529e-02  33258.84  0.4716576  12218.94
+#   1.792158e-01  33609.93  0.4766629  12501.50
+#   3.126990e-01  34289.85  0.4800001  13047.21
+#   2.372107e+00  56840.73  0.4892272  28647.07
+#   2.505769e+00  58347.57  0.4892590  29609.35
+#   4.393905e+00  76953.13  0.4891167  41219.76
+#   6.388054e+00  91766.61  0.4887443  50298.31
+
+# RMSE was used to select the optimal model using the smallest value.
+# The final value used for the model was lambda = 0.03969656.
 ```
 
 (ii) O modelo de regressão Lasso
 
-```{r}
+```{r eval = FALSE}
 model.lasso <- train(votos ~ .,
                      data = train,
                      trControl = fitControl,
                      method = "lasso",
                      preProcess = preProcValues,
-                     tuneLength = 5)
+                     tuneLength = 14)
 model.lasso
+```
+```{r}
+# The lasso 
+
+# 4152 samples
+#   22 predictors
+
+# Pre-processing: centered (35), scaled (35), remove (190) 
+# Resampling: Cross-Validated (5 fold, repeated 5 times) 
+# Summary of sample sizes: 3320, 3324, 3321, 3322, 3321, 3321, ... 
+# Resampling results across tuning parameters:
+
+#   fraction   RMSE      Rsquared   MAE     
+#   0.1730002  32953.44  0.4720962  12145.95
+#   0.2792364  33185.19  0.4714877  12122.50
+#   0.2958973  33211.18  0.4712632  12137.55
+#   0.3190092  33246.64  0.4708867  12158.88
+#   0.4282995  33364.27  0.4691050  12224.29
+#   0.4331078  33367.54  0.4690608  12225.64
+#   0.4996890  33408.76  0.4684222  12241.31
+#   0.5812284  33441.33  0.4677442  12252.95
+#   0.6504232  33460.25  0.4672024  12257.78
+#   0.6515946  33460.58  0.4671931  12257.85
+#   0.7103697  33477.54  0.4667093  12261.59
+#   0.7602646  33492.87  0.4662748  12264.75
+#   0.8068386  33507.96  0.4658499  12267.69
+#   0.9694438  33566.44  0.4642285  12277.97
+
+# RMSE was used to select the optimal model using the smallest value.
+# The final value used for the model was fraction = 0.1730002.
 ```
 
 (iii) O modelo KNN
 
-```{r}
-
+```{r eval = FALSE}
 model.knn <- train(votos ~ .,
                    data = train,
                    method = "knn",
+                   trControl = fitControl,
                    preProcess = preProcValues,
-                   tuneLength = 5)
+                   tuneLength = 15)
 model.knn
+```
+```{r}
+# k-Nearest Neighbors 
+
+# 4152 samples
+#   15 predictors
+
+# Pre-processing: centered (17), scaled (17), remove (3) 
+# Resampling: Cross-Validated (10 fold, repeated 10 times) 
+# Summary of sample sizes: 3737, 3737, 3737, 3736, 3736, 3736, ... 
+# Resampling results across tuning parameters:
+
+#   k   RMSE      Rsquared   MAE      
+#    5  33119.08  0.4816930  10923.272
+#    7  31734.72  0.5086782  10567.172
+#    9  31190.94  0.5205761  10362.233
+#   11  30824.15  0.5287652  10218.300
+#   13  30630.15  0.5334091  10122.921
+#   15  30335.30  0.5418068  10010.665
+#   17  30167.65  0.5468979   9955.611
+#   19  30076.90  0.5495504   9925.374
+#   21  30005.48  0.5518891   9894.946
+#   23  29938.96  0.5541140   9874.414
+#   25  29916.68  0.5551873   9868.410
+#   27  29888.06  0.5561855   9855.197
+#   29  29866.59  0.5568595   9848.150
+#   31  29861.76  0.5572071   9840.070
+#   33  29830.89  0.5584399   9826.879
+
+# RMSE was used to select the optimal model using the smallest value.
+# The final value used for the model was k = 33.
 ```
 
 **2. Compare os três modelos em termos do erro RMSE de validação cruzada.**
-
-  Utilizando validação cruzada, temos os seguintes resultados: no modelo de regressão Ridge, o menor RMSE é 34107.36 quando lambda = 0.00104874; o modelo Lasso possui menor RSME igual a 34168.80 quando a fração é 0.4495589; o modelo KNN possui RMSE igual a 34395.36 quando possui número de vizinhos é k = 13.
+  
+  Comparando os modelos, percebe-se que o menor RMSE é do modelo KNN (29830.89) , seguido do Lasso (32953.44) e, por último, o modelo Ridge (33258.53).
 
 
 **3. Quais as variáveis mais importantes segundo o modelo de regressão Ridge e Lasso?  Variáveis foram descartadas pelo Lasso? Quais?**
 
-```{r}
+```{r include = FALSE, eval=FALSE}
 ggplot(varImp(model.ridge))
 ```
-```{r}
+
+```{r include = FALSE, eval = FALSE}
 ggplot(varImp(model.lasso))
+
+```
+  
+  As variáveis mais importantes são total_receita, total_despesa, recursos_de_pessoas_juridicas, quantidade_despesas, quantidade_doacoes, quantidade_fornecedores, recursos_de_partidos, media_receita, quantidade_doadores, recursos_de_pessoas_fisicas, quantidade_fornecedores, quantidade_doadores, media_despesa e setor_economico_despesa. As variáveis descartadas serão as features setor_economico_receita, ID, partido, UF, recursos_proprios, recursos_de_outros_candidatos.comite. 
+  
+**4. Re-treine o melhor modelo (usando os melhores valores de parâmetros encontrados em todos os dados, sem usar validação cruzada).**
+
+```{r}
+train <- train %>% select (-setor_economico_receita, -ID, -partido, -UF, -recursos_proprios,
+                           -recursos_de_outros_candidatos.comites, -setor_economico_despesa)
+
+test <- test %>% select (-setor_economico_receita, -ID, -partido, -UF, -recursos_proprios,
+                           -recursos_de_outros_candidatos.comites, -setor_economico_despesa)
+```
+
+```{r eval = FALSE}
+grid <- expand.grid(k = model.knn$bestTune)
+tr <- trainControl(method = "optimism_boot")
+model.knn.retrain <- train(votos ~ ., 
+               data = train,
+               method = "knn",
+               tuneGrid = grid,
+               trControl = tr,
+               preProcess = preProcValues)
+model.knn.retrain
+```
+```{r}
+# k-Nearest Neighbors 
+
+# 4152 samples
+#   15 predictors
+
+# Pre-processing: centered (18), scaled (18), remove (5) 
+# Resampling: Bootstrapped (25 reps) 
+# Summary of sample sizes: 4152, 4152, 4152, 4152, 4152, 4152, ... 
+# Resampling results:
+
+#   RMSE      Rsquared   MAE     
+#   34775.23  0.4204401  10005.02
+
+# Tuning parameter 'k' was held constant at a value of 33
+```
+
+```{r eval = FALSE}
+pred <- predict(model.knn.retrain, test)
+newCSV <- ID
+newCSV$votos <- pred
+newCSV$votos[newCSV$votos < 0] <- 0
+write.csv(newCSV, "sample_submission.csv", row.names=FALSE)
 ```
 
