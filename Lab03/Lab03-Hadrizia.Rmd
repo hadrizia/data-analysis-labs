@@ -1,0 +1,78 @@
+---
+title: "Lab03"
+author: "Hadrizia Santos"
+date: "26 de fevereiro de 2018"
+output: html_document
+---
+
+*Carregando bibliotecas necessárias*
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(ggplot2)
+library(lattice)
+library(dplyr)
+```
+
+*Carregando dados e separando dados em treino e teste*
+
+```{r}
+
+## carregando os dados
+input <- read.csv("~/Downloads/LabsAD2/Lab03/train.csv", encoding = "latin1")
+
+## criando partição de 75% em treino e 25% em teste
+dataPartition <- createDataPartition(y = input$situacao_final, p=0.75, list=FALSE)
+
+## separando treino e teste
+train_data <- input[dataPartition, ]
+test_data <- input[-dataPartition, ]
+
+```
+
+*1. Há desbalanceamento das classes (isto é, uma classe tem muito mais instâncias que outra)? Em que proporção? Quais efeitos colaterais o desbalanceamento de classes pode causar no classificador?*
+
+Para responder a esta pergunta, precisamos contabilizar as instâncias das classes de situacao_final e analisar se há desbalanceamento entre elas.
+
+```{r}
+cont_nao_eleito <- input %>% select(situacao_final) %>% filter(situacao_final == 'nao_eleito') %>% nrow()
+cont_eleito <- input %>% select(situacao_final) %>% filter(situacao_final == 'eleito') %>% nrow()
+
+df = data.frame(situacao = c("eleito", "não eleito"), count = c(cont_eleito, cont_nao_eleito)) 
+
+ggplot(df, aes(x="", y=count, fill=situacao))+
+geom_bar(width = 1, stat = "identity") +
+   coord_polar("y", start=0)
+
+
+##tentar rebalanncear classes
+## 1- aleatoriamente retirar instancias da classe majoritaria
+## 2 - criar instancias da classe minoritaria
+## pacote unbalaced
+```
+
+Como se pode observar no gráfico acima, há um grande desbalanceamento das classes de situacao_final. Este é um problema que possui como principal efeito colateral *TODO*
+
+```{r}
+fitControl <- trainControl(method = "repeatedcv",
+                           search = "random",
+                           sampling = "up")
+
+
+formula <- as.formula(situacao_final ~ total_receita + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha)
+
+modelo1 <- caret::train(form=formula,
+                 data = train_data,
+                 method="glm",
+                 trControl = fitControl,
+                 family="binomial",      
+                 na.action = na.omit)
+
+summary(modelo1)
+```
+
+
+
+
