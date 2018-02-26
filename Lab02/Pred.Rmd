@@ -1,0 +1,46 @@
+---
+title: "Untitled"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(readr)
+library(caret)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+treino <- read.csv("~/Downloads/train.csv", encoding = "latin1")
+teste <- read.csv("~/Downloads/test.csv", encoding = "latin1")
+
+treino[is.na(treino)] <- 0
+teste[is.na(teste)] <- 0
+
+treino <- treino %>% select (-cargo)
+teste <- teste %>% select (-cargo)
+```
+
+```{r}
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 5,
+                           repeats = 3,
+                           search = "random")
+
+preProcValues <- c("center", "scale", "nzv")
+
+```
+
+```{r}
+m.ridge <- train(votos ~ ., data = train, trControl = fitControl, method = "ridge", preProcess = preProcValues, tuneLength = 10)
+m.lasso <- train(votos ~ ., data = train, trControl = fitControl, method = "lasso", preProcess = preProcValues, tuneLength = 10)
+m.knn <- train(votos ~ ., data = train, trControl = fitControl, method = "knn", preProcess = preProcValues, tuneLength = 10)
+
+ggplot(varImp(m.ridge))
+ggplot(varImp(m.lasso))
+```
+
+```{r}
+
+```
+
