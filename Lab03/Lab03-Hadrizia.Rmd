@@ -5,7 +5,7 @@ date: "26 de fevereiro de 2018"
 output: html_document
 ---
 
-*Carregando bibliotecas necessárias*
+**Carregando bibliotecas necessárias**
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -14,27 +14,35 @@ library(caret)
 library(ggplot2)
 library(lattice)
 library(dplyr)
+library(rpart)
+library(rpart.plot) 
 ```
 
-*Carregando dados e separando dados em treino e teste*
+*Carregando, separando em treino e teste e pre processando os dados*
 
 ```{r}
-
 ## carregando os dados
 input <- read.csv("~/Downloads/LabsAD2/Lab03/train.csv", encoding = "latin1")
+
+## pre-processando os dados (removendo variáveis irrelevantes)
+input <- input %>% select(-ID, -nome, -numero_cadidato, -idade, -estado_civil)
 
 ## criando partição de 75% em treino e 25% em teste
 dataPartition <- createDataPartition(y = input$situacao_final, p=0.75, list=FALSE)
 
-## separando treino e teste
+## Setando a seed para fazer a partição reproduzível
+set.seed(123)
+
+## separando o dataframe em treino e teste
 train_data <- input[dataPartition, ]
 test_data <- input[-dataPartition, ]
 
+
 ```
 
-*1. Há desbalanceamento das classes (isto é, uma classe tem muito mais instâncias que outra)? Em que proporção? Quais efeitos colaterais o desbalanceamento de classes pode causar no classificador?*
+**1. Há desbalanceamento das classes (isto é, uma classe tem muito mais instâncias que outra)? Em que proporção? Quais efeitos colaterais o desbalanceamento de classes pode causar no classificador?**
 
-Para responder a esta pergunta, precisamos contabilizar as instâncias das classes de situacao_final e analisar se há desbalanceamento entre elas.
+Para responder a esta pergunta, precisamos contabilizar as instâncias das classes de situacao_final para verificar se há desbalanceamento entre elas.
 
 ```{r}
 cont_nao_eleito <- input %>% select(situacao_final) %>% filter(situacao_final == 'nao_eleito') %>% nrow()
@@ -53,7 +61,9 @@ geom_bar(width = 1, stat = "identity") +
 ## pacote unbalaced
 ```
 
-Como se pode observar no gráfico acima, há um grande desbalanceamento das classes de situacao_final. Este é um problema que possui como principal efeito colateral *TODO*
+Como se pode observar no gráfico acima, há um grande desbalanceamento das classes de situacao_final. o número de candidatos não eleitos é quase 10 vezes maior do que o número de candidatos eleitos. Este é um problema que possui como principal efeito colateral a redução da acurácia dos modelos, uma vez que o classificador vai tender para a classe majoritária (neste casso, a não eleição dos votos).
+
+Para contornar o problema do desbalanceamento existem algumas formas, destacando-se undersampling, que consiste em remover algumas instâncias do dataset cuja classe é a majoritária e oversampling, que cria instâncias da classe minoritária. 
 
 ```{r}
 fitControl <- trainControl(method = "repeatedcv",
@@ -63,14 +73,58 @@ fitControl <- trainControl(method = "repeatedcv",
 
 formula <- as.formula(situacao_final ~ total_receita + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha)
 
-modelo1 <- caret::train(form=formula,
-                 data = train_data,
-                 method="glm",
-                 trControl = fitControl,
-                 family="binomial",      
-                 na.action = na.omit)
+#modelo1 <- train(form=situacao_final ~.,
+#                 data = train_data,
+#                 method="glm",
+#                 trControl = fitControl,
+#                 family="binomial",      
+#                 na.action = na.omit)
 
-summary(modelo1)
+modelo2 <- glm(formula = formula, data=train_data, family="binomial")
+
+summary(modelo2)
+
+train_data$isDeputado <- ifelse(train_data$descricao_ocupacao == "DEPUTADO", 1, 0)
+train_data <- train_data %>% select(situacao_final, total_receita, despesa_max_campanha, isDeputado)
+
+test_data$isDeputado <- ifelse(test_data$descricao_ocupacao == "DEPUTADO", 1, 0)
+test_data <- train_data %>% select(situacao_final, total_receita, despesa_max_campanha, isDeputado)
+
+modelo3 <- glm(formula = situacao_final ~., data=train_data, family="binomial")
+summary(modelo3)
+
+arvore1 <- train(situacao_final ~.,
+                 data=train_data,
+                 method = "rpart",
+                 cp=0.001,  # parâmetro de complexidade
+                 maxdepth=20)
+
+arvore1
+
+control <- rpart.control(maxdepth=20,
+                         minsplit=20,
+                         cp=0.001)
+ 
+arvore2 <- rpart(situacao_final ~.,
+                 data=train_data, control = control)
+
+# Usando o rpart você pode visualizar a árvore
+prp(arvore2)
+
+
+
+modelo <- train(situacao_final ~.,
+                 data=train_data,
+                method = "adaboost")
+
+modelo
+
+test_data$predicao <- predict(modelo, test_data)
+
+TP <- test_data %>% filter(situacao_final == "eleito", predicao == "nao_eleito") %>% nrow()
+TN <- test_data %>% filter(situacao_final == "Bad" , predicao == "nao_eleito" ) %>% nrow()
+FP <- test_data %>% filter(situacao_final == "Bad" , predicao == "Good") %>% nrow() 
+FN <- test_data %>% filter(situacao_final == "eleito", predicao == "Bad" ) %>% nrow()
 ```
 
 
