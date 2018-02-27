@@ -114,17 +114,28 @@ prp(arvore2)
 
 
 modelo <- train(situacao_final ~.,
-                 data=train_data,
-                method = "adaboost")
+                data=train_data,
+                method = "adaboost",
+                trControl = fitControl)
 
 modelo
 
 test_data$predicao <- predict(modelo, test_data)
 
-TP <- test_data %>% filter(situacao_final == "eleito", predicao == "nao_eleito") %>% nrow()
-TN <- test_data %>% filter(situacao_final == "Bad" , predicao == "nao_eleito" ) %>% nrow()
-FP <- test_data %>% filter(situacao_final == "Bad" , predicao == "Good") %>% nrow() 
-FN <- test_data %>% filter(situacao_final == "eleito", predicao == "Bad" ) %>% nrow()
+TP <- test_data %>% filter(situacao_final == "eleito", predicao == "eleito") %>% nrow()
+TN <- test_data %>% filter(situacao_final == "nao_eleito" , predicao == "nao_eleito" ) %>% nrow()
+FP <- test_data %>% filter(situacao_final == "nao_eleito" , predicao == "eleito") %>% nrow() 
+FN <- test_data %>% filter(situacao_final == "eleito", predicao == "nao_eleito" ) %>% nrow()
+
+accuracy <- (TP + TN)/(TP + TN + FP + FN) 
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+accuracy
+precision
+recall
+
+confusionMatrix(test_data$predicao, test_data$situacao_final)
 ```
 
 
