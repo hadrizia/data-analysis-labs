@@ -16,6 +16,7 @@ library(lattice)
 library(dplyr)
 library(rpart)
 library(rpart.plot) 
+library(ROSE)
 ```
 
 *Carregando, separando em treino e teste e pre processando os dados*
@@ -31,7 +32,7 @@ input <- input %>% select(-ID, -nome, -numero_cadidato, -idade, -estado_civil)
 dataPartition <- createDataPartition(y = input$situacao_final, p=0.75, list=FALSE)
 
 ## Setando a seed para fazer a partição reproduzível
-set.seed(123)
+set.seed(9560)
 
 ## separando o dataframe em treino e teste
 train_data <- input[dataPartition, ]
@@ -65,24 +66,12 @@ Como se pode observar no gráfico acima, há um grande desbalanceamento das clas
 
 Para contornar o problema do desbalanceamento existem algumas formas, destacando-se undersampling, que consiste em remover algumas instâncias do dataset cuja classe é a majoritária e oversampling, que cria instâncias da classe minoritária. 
 
+Abaixo tem-se os dois métodos citados acima e o ROSE e lista o número de instâncias de cada método utilizado.
+
+
 ```{r}
 fitControl <- trainControl(method = "repeatedcv",
-                           search = "random",
-                           sampling = "up")
-
-
-formula <- as.formula(situacao_final ~ total_receita + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha)
-
-#modelo1 <- train(form=situacao_final ~.,
-#                 data = train_data,
-#                 method="glm",
-#                 trControl = fitControl,
-#                 family="binomial",      
-#                 na.action = na.omit)
-
-modelo2 <- glm(formula = formula, data=train_data, family="binomial")
-
-summary(modelo2)
+                           search = "random")
 
 train_data$isDeputado <- ifelse(train_data$descricao_ocupacao == "DEPUTADO", 1, 0)
 train_data <- train_data %>% select(situacao_final, total_receita, despesa_max_campanha, isDeputado)
@@ -90,11 +79,29 @@ train_data <- train_data %>% select(situacao_final, total_receita, despesa_max_c
 test_data$isDeputado <- ifelse(test_data$descricao_ocupacao == "DEPUTADO", 1, 0)
 test_data <- train_data %>% select(situacao_final, total_receita, despesa_max_campanha, isDeputado)
 
-modelo3 <- glm(formula = situacao_final ~., data=train_data, family="binomial")
+rose_train <- ROSE(situacao_final ~ ., data  = train_data)$data                         
+table(rose_train$situacao_final) 
+
+up_train <- upSample(x = train_data[,],
+                     y = train_data$situacao_final)  
+
+up_train <- up_train %>% select(-Class)
+table(up_train$situacao_final) 
+
+down_train <- downSample(x = train_data[, -ncol(train_data)],
+                         y = train_data$situacao_final)
+down_train <- down_train %>% select(-Class)
+table(down_train$situacao_final)  
+```
+
+
+```{r}
+
+modelo3 <- glm(formula = situacao_final ~., data=up_train, family="binomial")
 summary(modelo3)
 
-arvore1 <- train(situacao_final ~.,
-                 data=train_data,
+arvore1 <- caret::train(situacao_final ~.,
+                 data=up_train,
                  method = "rpart",
                  cp=0.001,  # parâmetro de complexidade
                  maxdepth=20)
@@ -106,19 +113,17 @@ control <- rpart.control(maxdepth=20,
                          cp=0.001)
  
 arvore2 <- rpart(situacao_final ~.,
-                 data=train_data, control = control)
+                 data=up_train, control = control)
 
-# Usando o rpart você pode visualizar a árvore
 prp(arvore2)
 
-
-
-modelo <- train(situacao_final ~.,
-                data=train_data,
+modelo <- caret::train(situacao_final ~.,
+                data=up_train,
                 method = "adaboost",
                 trControl = fitControl)
 
 modelo
+
 
 test_data$predicao <- predict(modelo, test_data)
 
@@ -131,6 +136,9 @@ accuracy <- (TP + TN)/(TP + TN + FP + FN)
 precision <- TP / (TP + FP)
 recall <- TP / (TP + FN)
 
+f_measure <- 2 * (precision * recall) / (precision + recall)
+
+f_measure
 accuracy
 precision
 recall
