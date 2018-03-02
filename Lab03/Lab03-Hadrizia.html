@@ -125,17 +125,23 @@ $(document).ready(function () {
 
 <p><strong>Carregando bibliotecas necessárias</strong></p>
 <p><em>Carregando, separando em treino e teste e pre processando os dados</em></p>
-<pre class="r"><code>## carregando os dados
+<pre class="r"><code>## carregando os dados de treino
 input &lt;- read.csv(&quot;~/Downloads/LabsAD2/Lab03/train.csv&quot;, encoding = &quot;latin1&quot;)
 
 ## pre-processando os dados (removendo variáveis irrelevantes)
-input &lt;- input %&gt;% select(-ID, -nome, -numero_cadidato, -idade, -estado_civil)
+input &lt;- input %&gt;% select(-ID, -nome, -numero_cadidato, -idade, -estado_civil, -grau, -setor_economico_despesa, -setor_economico_receita)
+
+## carregando os dados de validação
+input_teste &lt;- read.csv(&quot;~/Downloads/LabsAD2/Lab03/test.csv&quot;, encoding = &quot;latin1&quot;)
+ID &lt;-input_teste %&gt;% select(ID)
+input_teste &lt;- input_teste %&gt;% select(-ID, -nome, -numero_cadidato, -idade, -estado_civil, -grau,
+                                      -setor_economico_despesa, -setor_economico_receita)
 
 ## criando partição de 75% em treino e 25% em teste
 dataPartition &lt;- createDataPartition(y = input$situacao_final, p=0.75, list=FALSE)
 
 ## Setando a seed para fazer a partição reproduzível
-set.seed(123)
+set.seed(9560)
 
 ## separando o dataframe em treino e teste
 train_data &lt;- input[dataPartition, ]
@@ -157,837 +163,274 @@ geom_bar(width = 1, stat = &quot;identity&quot;) +
 ## pacote unbalaced</code></pre>
 <p>Como se pode observar no gráfico acima, há um grande desbalanceamento das classes de situacao_final. o número de candidatos não eleitos é quase 10 vezes maior do que o número de candidatos eleitos. Este é um problema que possui como principal efeito colateral a redução da acurácia dos modelos, uma vez que o classificador vai tender para a classe majoritária (neste casso, a não eleição dos votos).</p>
 <p>Para contornar o problema do desbalanceamento existem algumas formas, destacando-se undersampling, que consiste em remover algumas instâncias do dataset cuja classe é a majoritária e oversampling, que cria instâncias da classe minoritária.</p>
+<p>Abaixo tem-se os dois métodos citados acima, além do método ROSE, e lista o número de instâncias de cada método utilizado.</p>
 <pre class="r"><code>fitControl &lt;- trainControl(method = &quot;repeatedcv&quot;,
                            search = &quot;random&quot;,
-                           sampling = &quot;up&quot;)
+                           number = 10, repeats=10)
 
+train_data$isDeputado &lt;- ifelse(train_data$descricao_ocupacao == &quot;DEPUTADO&quot;, 1, 0)
+train_data &lt;- train_data %&gt;% select(-descricao_ocupacao)
 
-formula &lt;- as.formula(situacao_final ~ total_receita + descricao_ocupacao + descricao_cor_raca + despesa_max_campanha)
+test_data$isDeputado &lt;- ifelse(test_data$descricao_ocupacao == &quot;DEPUTADO&quot;, 1, 0)
+test_data &lt;- test_data %&gt;% select(-descricao_ocupacao)
 
-#modelo1 &lt;- train(form=situacao_final ~.,
-#                 data = train_data,
-#                 method=&quot;glm&quot;,
-#                 trControl = fitControl,
-#                 family=&quot;binomial&quot;,      
-#                 na.action = na.omit)
+input_teste$isDeputado &lt;- ifelse(input_teste$descricao_ocupacao == &quot;DEPUTADO&quot;, 1, 0)
+input_teste &lt;- input_teste %&gt;% select(total_receita, despesa_max_campanha, isDeputado)
 
-modelo2 &lt;- glm(formula = formula, data=train_data, family=&quot;binomial&quot;)</code></pre>
+rose_train &lt;- ROSE(situacao_final ~ ., data  = train_data)$data                         
+table(rose_train$situacao_final) </code></pre>
+<pre><code>## 
+## nao_eleito     eleito 
+##       1520       1582</code></pre>
+<pre class="r"><code>up_train &lt;- upSample(x = train_data[,],
+                     y = train_data$situacao_final)  
+
+up_train &lt;- up_train %&gt;% select(-Class)
+table(up_train$situacao_final) </code></pre>
+<pre><code>## 
+##     eleito nao_eleito 
+##       2790       2790</code></pre>
+<pre class="r"><code>down_train &lt;- downSample(x = train_data[, -ncol(train_data)],
+                         y = train_data$situacao_final)
+down_train &lt;- down_train %&gt;% select(-Class)
+table(down_train$situacao_final)  </code></pre>
+<pre><code>## 
+##     eleito nao_eleito 
+##        312        312</code></pre>
+<p><strong>Treine: um modelo de regressão logística, uma árvore de decisão e um modelo de adaboost. Tune esses modelos usando validação cruzada e controle overfitting se necessário, considerando as particularidades de cada modelo.</strong> * Regressão Logística</p>
+<pre class="r"><code>modelo3 &lt;- glm(formula = situacao_final ~., data=up_train, family=&quot;binomial&quot;)</code></pre>
 <pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred</code></pre>
-<pre class="r"><code>summary(modelo2)</code></pre>
+<pre class="r"><code>summary(modelo3)</code></pre>
 <pre><code>## 
 ## Call:
-## glm(formula = formula, family = &quot;binomial&quot;, data = train_data)
+## glm(formula = situacao_final ~ ., family = &quot;binomial&quot;, data = up_train)
 ## 
 ## Deviance Residuals: 
-##      Min        1Q    Median        3Q       Max  
-## -2.94642   0.00008   0.18169   0.27677   3.01175  
+##     Min       1Q   Median       3Q      Max  
+## -2.1565  -0.2067   0.0000   0.2446   5.4429  
 ## 
 ## Coefficients:
-##                                                                                                                          Estimate
-## (Intercept)                                                                                                             2.083e+01
-## total_receita                                                                                                          -2.225e-06
-## descricao_ocupacaoADVOGADO                                                                                             -7.135e-01
-## descricao_ocupacaoAGENTE ADMINISTRATIVO                                                                                 1.589e+01
-## descricao_ocupacaoAGENTE DE SAÃ\u009aDE E SANITARISTA                                                                   1.611e+01
-## descricao_ocupacaoAGENTE DE SERVIÃ\u0087OS FUNERÃ\u0081RIOS E EMBALSAMADOR                                              1.604e+01
-## descricao_ocupacaoAGENTE DE VIAGEM                                                                                      1.561e+01
-## descricao_ocupacaoAGENTE POSTAL                                                                                         1.602e+01
-## descricao_ocupacaoAGRÃ\u0094NOMO                                                                                       -1.836e+00
-## descricao_ocupacaoAGRICULTOR                                                                                           -6.061e-01
-## descricao_ocupacaoALMOXARIFE                                                                                            1.495e+01
-## descricao_ocupacaoANALISTA DE SISTEMAS                                                                                  1.611e+01
-## descricao_ocupacaoAPOSENTADO (EXCETO SERVIDOR PÃ\u009aBLICO)                                                            1.600e+01
-## descricao_ocupacaoARQUITETO                                                                                            -1.423e+00
-## descricao_ocupacaoARTESÃ\u0083O                                                                                         1.550e+01
-## descricao_ocupacaoARTISTA PLÃ\u0081STICO E ASSEMELHADOS                                                                 1.616e+01
-## descricao_ocupacaoASSISTENTE SOCIAL                                                                                    -6.784e-01
-## descricao_ocupacaoATLETA PROFISSIONAL E TÃ\u0089CNICO EM DESPORTOS                                                      1.699e+01
-## descricao_ocupacaoATOR E DIRETOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                    1.665e+01
-## descricao_ocupacaoAUXILIAR DE ESCRITÃ\u0093RIO E ASSEMELHADOS                                                           1.598e+01
-## descricao_ocupacaoAUXILIAR DE LABORATÃ\u0093RIO                                                                         1.549e+01
-## descricao_ocupacaoBANCÃ\u0081RIO E ECONOMIÃ\u0081RIO                                                                   -5.830e-01
-## descricao_ocupacaoBIÃ\u0093LOGO                                                                                         1.603e+01
-## descricao_ocupacaoBIBLIOTECÃ\u0081RIO                                                                                   1.562e+01
-## descricao_ocupacaoBIOMÃ\u0089DICO                                                                                       1.573e+01
-## descricao_ocupacaoBOMBEIRO CIVIL                                                                                        1.549e+01
-## descricao_ocupacaoBOMBEIRO MILITAR                                                                                      1.586e+01
-## descricao_ocupacaoCABELEIREIRO E BARBEIRO                                                                               1.572e+01
-## descricao_ocupacaoCANTOR E COMPOSITOR                                                                                   1.622e+01
-## descricao_ocupacaoCATADOR DE RECICLÃ\u0081VEIS                                                                          1.573e+01
-## descricao_ocupacaoCIENTISTA POLÃ\u008dTICO                                                                              1.826e+01
-## descricao_ocupacaoCOBRADOR DE TRANSPORTE COLETIVO                                                                       1.584e+01
-## descricao_ocupacaoCOMERCIANTE                                                                                           6.012e-01
-## descricao_ocupacaoCOMERCIÃ\u0081RIO                                                                                     1.690e+01
-## descricao_ocupacaoCOMUNICÃ\u0093LOGO                                                                                    1.637e+01
-## descricao_ocupacaoCONTADOR                                                                                              1.584e+01
-## descricao_ocupacaoCORRETOR DE IMÃ\u0093VEIS, SEGUROS, TÃ\u008dTULOS E VALORES                                          -1.022e+00
-## descricao_ocupacaoCOZINHEIRO                                                                                            1.644e+01
-## descricao_ocupacaoDEPUTADO                                                                                             -2.884e+00
-## descricao_ocupacaoDESENHISTA                                                                                            1.548e+01
-## descricao_ocupacaoDESPACHANTE                                                                                           1.589e+01
-## descricao_ocupacaoDIGITADOR                                                                                             1.627e+01
-## descricao_ocupacaoDIPLOMATA                                                                                             1.632e+01
-## descricao_ocupacaoDIRETOR DE EMPRESAS                                                                                   1.612e+01
-## descricao_ocupacaoDIRETOR DE ESTABELECIMENTO DE ENSINO                                                                  1.577e+01
-## descricao_ocupacaoDONA DE CASA                                                                                          1.592e+01
-## descricao_ocupacaoECONOMISTA                                                                                            8.488e-01
-## descricao_ocupacaoECONOMISTA DOMÃ\u0089STICO                                                                            1.515e+01
-## descricao_ocupacaoELETRICISTA E ASSEMELHADOS                                                                            1.565e+01
-## descricao_ocupacaoEMPREGADO DOMÃ\u0089STICO                                                                             1.547e+01
-## descricao_ocupacaoEMPRESÃ\u0081RIO                                                                                     -5.362e-02
-## descricao_ocupacaoENFERMEIRO                                                                                           -2.899e-01
-## descricao_ocupacaoENGENHEIRO                                                                                           -1.457e-01
-## descricao_ocupacaoESCRITOR E CRÃ\u008dTICO                                                                              1.606e+01
-## descricao_ocupacaoESTETICISTA                                                                                           1.578e+01
-## descricao_ocupacaoESTIVADOR, CARREGADOR E ASSEMELHADOS                                                                  1.539e+01
-## descricao_ocupacaoESTOFADOR                                                                                             1.594e+01
-## descricao_ocupacaoESTUDANTE, BOLSISTA, ESTAGIÃ\u0081RIO E ASSEMELHADOS                                                  5.902e-01
-## descricao_ocupacaoFARMACÃ\u008aUTICO                                                                                    3.176e-01
-## descricao_ocupacaoFERROVIÃ\u0081RIO                                                                                     1.594e+01
-## descricao_ocupacaoFISCAL                                                                                                1.558e+01
-## descricao_ocupacaoFISIOTERAPEUTA E TERAPEUTA OCUPACIONAL                                                                1.592e+01
-## descricao_ocupacaoFOTÃ\u0093GRAFO E ASSEMELHADOS                                                                        1.560e+01
-## descricao_ocupacaoGARÃ\u0087OM                                                                                          1.600e+01
-## descricao_ocupacaoGARI OU LIXEIRO                                                                                       1.549e+01
-## descricao_ocupacaoGEÃ\u0093GRAFO                                                                                        1.560e+01
-## descricao_ocupacaoGEÃ\u0093LOGO                                                                                         1.638e+01
-## descricao_ocupacaoGEOFÃ\u008dSICO                                                                                       1.639e+01
-## descricao_ocupacaoGERENTE                                                                                               1.568e+01
-## descricao_ocupacaoGUIA DE TURISMO                                                                                       1.572e+01
-## descricao_ocupacaoHISTORIADOR                                                                                           1.623e+01
-## descricao_ocupacaoINDUSTRIAL                                                                                           -2.426e+00
-## descricao_ocupacaoJORNALEIRO                                                                                            1.613e+01
-## descricao_ocupacaoJORNALISTA E REDATOR                                                                                 -1.237e+00
-## descricao_ocupacaoLOCUTOR E COMENTARISTA DE RÃ\u0081DIO E TELEVISÃ\u0083O E RADIALISTA                                 -9.383e-01
-## descricao_ocupacaoMÃ\u0089DICO                                                                                         -7.122e-01
-## descricao_ocupacaoMANICURE E MAQUILADOR                                                                                 1.592e+01
-## descricao_ocupacaoMÃ\u009aSICO                                                                                          1.606e+01
-## descricao_ocupacaoMASSAGISTA                                                                                            1.562e+01
-## descricao_ocupacaoMECÃ\u0082NICO DE MANUTENÃ\u0087Ã\u0083O                                                              1.614e+01
-## descricao_ocupacaoMEMBRO DAS FORÃ\u0087AS ARMADAS                                                                       1.593e+01
-## descricao_ocupacaoMEMBRO DO MINISTÃ\u0089RIO PÃ\u009aBLICO                                                              1.677e+01
-## descricao_ocupacaoMETEOROLOGISTA                                                                                        1.594e+01
-## descricao_ocupacaoMILITAR REFORMADO                                                                                     1.593e+01
-## descricao_ocupacaoMOTOBOY                                                                                               1.597e+01
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE COLETIVO DE PASSAGEIROS                                     1.591e+01
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE DE CARGA                                                    1.611e+01
-## descricao_ocupacaoMOTORISTA PARTICULAR                                                                                  1.548e+01
-## descricao_ocupacaoNUTRICIONISTA E ASSEMELHADOS                                                                          1.589e+01
-## descricao_ocupacaoOCEANÃ\u0093GRAFO                                                                                     1.583e+01
-## descricao_ocupacaoOCUPANTE DE CARGO EM COMISSÃ\u0083O                                                                   1.663e+01
-## descricao_ocupacaoODONTÃ\u0093LOGO                                                                                      1.612e+01
-## descricao_ocupacaoOPERADOR DE APARELHOS DE PRODUÃ\u0087Ã\u0083O INDUSTRIAL                                              1.539e+01
-## descricao_ocupacaoOPERADOR DE COMPUTADOR                                                                                1.574e+01
-## descricao_ocupacaoOPERADOR DE EQUIPAMENTO DE RÃ\u0081DIO, TELEVISÃ\u0083O, SOM E CINEMA                                 1.550e+01
-## descricao_ocupacaoOUTROS                                                                                                4.529e-01
-## descricao_ocupacaoPADEIRO, CONFEITEIRO E ASSEMELHADOS                                                                   1.601e+01
-## descricao_ocupacaoPECUARISTA                                                                                           -1.451e+00
-## descricao_ocupacaoPEDAGOGO                                                                                             -7.802e-01
-## descricao_ocupacaoPESCADOR                                                                                              1.642e+01
-## descricao_ocupacaoPETROLEIRO                                                                                            1.573e+01
-## descricao_ocupacaoPILOTO DE AVIAÃ\u0087Ã\u0083O COMERCIAL, NAVEGADOR, MECÃ\u0082NICO DE VÃ\u0094O E ASSEMELHADOS        1.605e+01
-## descricao_ocupacaoPOLICIAL CIVIL                                                                                       -1.423e+00
-## descricao_ocupacaoPOLICIAL MILITAR                                                                                      4.499e-01
-## descricao_ocupacaoPORTEIRO DE EDIFÃ\u008dCIO, ASCENSORISTA, GARAGISTA E ZELADOR                                         1.613e+01
-## descricao_ocupacaoPRODUTOR AGROPECUÃ\u0081RIO                                                                           1.602e+01
-## descricao_ocupacaoPRODUTOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                          1.617e+01
-## descricao_ocupacaoPROFESSOR DE ENSINO FUNDAMENTAL                                                                       1.590e+01
-## descricao_ocupacaoPROFESSOR DE ENSINO MÃ\u0089DIO                                                                       5.133e-01
-## descricao_ocupacaoPROFESSOR DE ENSINO SUPERIOR                                                                         -5.531e-01
-## descricao_ocupacaoPROFESSOR E INSTRUTOR DE FORMAÃ\u0087Ã\u0083O PROFISSIONAL                                            1.612e+01
-## descricao_ocupacaoPROGRAMADOR DE COMPUTADOR                                                                             1.616e+01
-## descricao_ocupacaoPSICÃ\u0093LOGO                                                                                      -1.036e+00
-## descricao_ocupacaoPUBLICITÃ\u0081RIO                                                                                    1.141e+00
-## descricao_ocupacaoQUÃ\u008dMICO                                                                                         1.675e+01
-## descricao_ocupacaoRECEPCIONISTA                                                                                         1.559e+01
-## descricao_ocupacaoRELAÃ\u0087Ã\u0095ES-PÃ\u009aBLICAS                                                                   1.601e+01
-## descricao_ocupacaoREPRESENTANTE COMERCIAL                                                                              -5.653e-01
-## descricao_ocupacaoSACERDOTE OU MEMBRO DE ORDEM OU SEITA RELIGIOSA                                                      -1.184e+00
-## descricao_ocupacaoSECRETÃ\u0081RIO E DATILÃ\u0093GRAFO                                                                  1.592e+01
-## descricao_ocupacaoSENADOR                                                                                              -1.806e+01
-## descricao_ocupacaoSERRALHEIRO                                                                                           1.588e+01
-## descricao_ocupacaoSERVENTUÃ\u0081RIO DE JUSTIÃ\u0087A                                                                   1.572e+01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO CIVIL APOSENTADO                                                              -8.986e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO ESTADUAL                                                                       6.695e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO FEDERAL                                                                       -2.098e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO MUNICIPAL                                                                      1.595e+01
-## descricao_ocupacaoSOCIÃ\u0093LOGO                                                                                       1.624e+01
-## descricao_ocupacaoSUPERVISOR, INSPETOR E AGENTE DE COMPRAS E VENDAS                                                     1.614e+01
-## descricao_ocupacaoTÃ\u0089CNICO CONTABILIDADE, ESTATÃ\u008dSTICA, ECONOMIA DOMÃ\u0089STICA E ADMINISTRAÃ\u0087Ã\u0083O  1.636e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE ELETRICIDADE, ELETRÃ\u0094NICA E TELECOMUNICAÃ\u0087Ã\u0095ES                        1.595e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE ENFERMAGEM E ASSEMELHADOS (EXCETO ENFERMEIRO)                                        1.594e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE LABORATÃ\u0093RIO E RAIOS X                                                          1.582e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE MECÃ\u0082NICA                                                                       1.640e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE MINERAÃ\u0087Ã\u0083O, METALURGIA E GEOLOGIA                                         1.584e+01
-## descricao_ocupacaoTÃ\u0089CNICO DE QUÃ\u008dMICA                                                                        1.583e+01
-## descricao_ocupacaoTÃ\u0089CNICO EM AGRONOMIA E AGRIMENSURA                                                              1.879e+01
-## descricao_ocupacaoTÃ\u0089CNICO EM EDIFICAÃ\u0087Ã\u0095ES                                                              1.564e+01
-## descricao_ocupacaoTÃ\u0089CNICO EM INFORMÃ\u0081TICA                                                                    1.597e+01
-## descricao_ocupacaoTAXISTA                                                                                               1.568e+01
-## descricao_ocupacaoTERAPEUTA                                                                                             1.594e+01
-## descricao_ocupacaoTORNEIRO MECÃ\u0082NICO                                                                               1.519e+01
-## descricao_ocupacaoTRABALHADOR DE CONSTRUÃ\u0087Ã\u0083O CIVIL                                                           1.604e+01
-## descricao_ocupacaoTRABALHADOR DE FABRICAÃ\u0087Ã\u0083O DE ROUPAS                                                       1.606e+01
-## descricao_ocupacaoTRABALHADOR DOS SERVIÃ\u0087OS DE CONTABILIDADE, DE CAIXA E ASSEMELHADOS                              1.596e+01
-## descricao_ocupacaoTRABALHADOR EM ATIVIDADE DE PROCESSAMENTO QUÃ\u008dMICO                                               1.622e+01
-## descricao_ocupacaoTRABALHADOR METALÃ\u009aRGICO E SIDERÃ\u009aRGICO                                                     1.635e+01
-## descricao_ocupacaoTRABALHADOR RURAL                                                                                     1.604e+01
-## descricao_ocupacaoVENDEDOR DE COMÃ\u0089RCIO VAREJISTA E ATACADISTA                                                     1.579e+01
-## descricao_ocupacaoVENDEDOR PRACISTA, REPRESENTANTE, CAIXEIRO-VIAJANTE E ASSEMELHADOS                                    1.568e+01
-## descricao_ocupacaoVEREADOR                                                                                             -1.858e-01
-## descricao_ocupacaoVETERINÃ\u0081RIO                                                                                     1.759e+01
-## descricao_ocupacaoVIGILANTE                                                                                             1.586e+01
-## descricao_cor_racaBRANCA                                                                                               -1.776e+01
-## descricao_cor_racaINDÃ\u008dGENA                                                                                       -2.555e+00
-## descricao_cor_racaPARDA                                                                                                -1.732e+01
-## descricao_cor_racaPRETA                                                                                                -1.700e+01
-## despesa_max_campanha                                                                                                    1.130e-07
-##                                                                                                                        Std. Error
-## (Intercept)                                                                                                             2.028e+03
-## total_receita                                                                                                           1.665e-07
-## descricao_ocupacaoADVOGADO                                                                                              6.128e-01
-## descricao_ocupacaoAGENTE ADMINISTRATIVO                                                                                 2.511e+03
-## descricao_ocupacaoAGENTE DE SAÃ\u009aDE E SANITARISTA                                                                   4.776e+03
-## descricao_ocupacaoAGENTE DE SERVIÃ\u0087OS FUNERÃ\u0081RIOS E EMBALSAMADOR                                              7.594e+03
-## descricao_ocupacaoAGENTE DE VIAGEM                                                                                      1.075e+04
-## descricao_ocupacaoAGENTE POSTAL                                                                                         4.045e+03
-## descricao_ocupacaoAGRÃ\u0094NOMO                                                                                        1.118e+00
-## descricao_ocupacaoAGRICULTOR                                                                                            1.184e+00
-## descricao_ocupacaoALMOXARIFE                                                                                            1.075e+04
-## descricao_ocupacaoANALISTA DE SISTEMAS                                                                                  5.340e+03
-## descricao_ocupacaoAPOSENTADO (EXCETO SERVIDOR PÃ\u009aBLICO)                                                            1.335e+03
-## descricao_ocupacaoARQUITETO                                                                                             1.156e+00
-## descricao_ocupacaoARTESÃ\u0083O                                                                                         3.701e+03
-## descricao_ocupacaoARTISTA PLÃ\u0081STICO E ASSEMELHADOS                                                                 7.538e+03
-## descricao_ocupacaoASSISTENTE SOCIAL                                                                                     1.192e+00
-## descricao_ocupacaoATLETA PROFISSIONAL E TÃ\u0089CNICO EM DESPORTOS                                                      5.805e+03
-## descricao_ocupacaoATOR E DIRETOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                    3.834e+03
-## descricao_ocupacaoAUXILIAR DE ESCRITÃ\u0093RIO E ASSEMELHADOS                                                           1.875e+03
-## descricao_ocupacaoAUXILIAR DE LABORATÃ\u0093RIO                                                                         1.075e+04
-## descricao_ocupacaoBANCÃ\u0081RIO E ECONOMIÃ\u0081RIO                                                                    1.189e+00
-## descricao_ocupacaoBIÃ\u0093LOGO                                                                                         4.016e+03
-## descricao_ocupacaoBIBLIOTECÃ\u0081RIO                                                                                   1.075e+04
-## descricao_ocupacaoBIOMÃ\u0089DICO                                                                                       7.568e+03
-## descricao_ocupacaoBOMBEIRO CIVIL                                                                                        7.575e+03
-## descricao_ocupacaoBOMBEIRO MILITAR                                                                                      3.215e+03
-## descricao_ocupacaoCABELEIREIRO E BARBEIRO                                                                               3.086e+03
-## descricao_ocupacaoCANTOR E COMPOSITOR                                                                                   2.976e+03
-## descricao_ocupacaoCATADOR DE RECICLÃ\u0081VEIS                                                                          1.075e+04
-## descricao_ocupacaoCIENTISTA POLÃ\u008dTICO                                                                              1.075e+04
-## descricao_ocupacaoCOBRADOR DE TRANSPORTE COLETIVO                                                                       6.190e+03
-## descricao_ocupacaoCOMERCIANTE                                                                                           9.131e-01
-## descricao_ocupacaoCOMERCIÃ\u0081RIO                                                                                     3.106e+03
-## descricao_ocupacaoCOMUNICÃ\u0093LOGO                                                                                    6.205e+03
-## descricao_ocupacaoCONTADOR                                                                                              1.940e+03
-## descricao_ocupacaoCORRETOR DE IMÃ\u0093VEIS, SEGUROS, TÃ\u008dTULOS E VALORES                                           8.997e-01
-## descricao_ocupacaoCOZINHEIRO                                                                                            7.603e+03
-## descricao_ocupacaoDEPUTADO                                                                                              5.908e-01
-## descricao_ocupacaoDESENHISTA                                                                                            1.075e+04
-## descricao_ocupacaoDESPACHANTE                                                                                           7.603e+03
-## descricao_ocupacaoDIGITADOR                                                                                             1.075e+04
-## descricao_ocupacaoDIPLOMATA                                                                                             1.075e+04
-## descricao_ocupacaoDIRETOR DE EMPRESAS                                                                                   3.062e+03
-## descricao_ocupacaoDIRETOR DE ESTABELECIMENTO DE ENSINO                                                                  1.075e+04
-## descricao_ocupacaoDONA DE CASA                                                                                          1.487e+03
-## descricao_ocupacaoECONOMISTA                                                                                            1.497e+00
-## descricao_ocupacaoECONOMISTA DOMÃ\u0089STICO                                                                            1.075e+04
-## descricao_ocupacaoELETRICISTA E ASSEMELHADOS                                                                            4.783e+03
-## descricao_ocupacaoEMPREGADO DOMÃ\u0089STICO                                                                             7.585e+03
-## descricao_ocupacaoEMPRESÃ\u0081RIO                                                                                      6.238e-01
-## descricao_ocupacaoENFERMEIRO                                                                                            1.190e+00
-## descricao_ocupacaoENGENHEIRO                                                                                            8.176e-01
-## descricao_ocupacaoESCRITOR E CRÃ\u008dTICO                                                                              6.181e+03
-## descricao_ocupacaoESTETICISTA                                                                                           7.603e+03
-## descricao_ocupacaoESTIVADOR, CARREGADOR E ASSEMELHADOS                                                                  1.075e+04
-## descricao_ocupacaoESTOFADOR                                                                                             1.075e+04
-## descricao_ocupacaoESTUDANTE, BOLSISTA, ESTAGIÃ\u0081RIO E ASSEMELHADOS                                                  1.162e+00
-## descricao_ocupacaoFARMACÃ\u008aUTICO                                                                                    2.530e+00
-## descricao_ocupacaoFERROVIÃ\u0081RIO                                                                                     7.519e+03
-## descricao_ocupacaoFISCAL                                                                                                4.540e+03
-## descricao_ocupacaoFISIOTERAPEUTA E TERAPEUTA OCUPACIONAL                                                                7.602e+03
-## descricao_ocupacaoFOTÃ\u0093GRAFO E ASSEMELHADOS                                                                        6.172e+03
-## descricao_ocupacaoGARÃ\u0087OM                                                                                          7.576e+03
-## descricao_ocupacaoGARI OU LIXEIRO                                                                                       1.075e+04
-## descricao_ocupacaoGEÃ\u0093GRAFO                                                                                        1.075e+04
-## descricao_ocupacaoGEÃ\u0093LOGO                                                                                         7.599e+03
-## descricao_ocupacaoGEOFÃ\u008dSICO                                                                                       1.075e+04
-## descricao_ocupacaoGERENTE                                                                                               4.358e+03
-## descricao_ocupacaoGUIA DE TURISMO                                                                                       1.075e+04
-## descricao_ocupacaoHISTORIADOR                                                                                           7.583e+03
-## descricao_ocupacaoINDUSTRIAL                                                                                            1.821e+00
-## descricao_ocupacaoJORNALEIRO                                                                                            1.075e+04
-## descricao_ocupacaoJORNALISTA E REDATOR                                                                                  8.165e-01
-## descricao_ocupacaoLOCUTOR E COMENTARISTA DE RÃ\u0081DIO E TELEVISÃ\u0083O E RADIALISTA                                  1.191e+00
-## descricao_ocupacaoMÃ\u0089DICO                                                                                          6.517e-01
-## descricao_ocupacaoMANICURE E MAQUILADOR                                                                                 7.586e+03
-## descricao_ocupacaoMÃ\u009aSICO                                                                                          4.317e+03
-## descricao_ocupacaoMASSAGISTA                                                                                            1.075e+04
-## descricao_ocupacaoMECÃ\u0082NICO DE MANUTENÃ\u0087Ã\u0083O                                                              7.596e+03
-## descricao_ocupacaoMEMBRO DAS FORÃ\u0087AS ARMADAS                                                                       3.369e+03
-## descricao_ocupacaoMEMBRO DO MINISTÃ\u0089RIO PÃ\u009aBLICO                                                              7.586e+03
-## descricao_ocupacaoMETEOROLOGISTA                                                                                        1.075e+04
-## descricao_ocupacaoMILITAR REFORMADO                                                                                     3.219e+03
-## descricao_ocupacaoMOTOBOY                                                                                               1.075e+04
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE COLETIVO DE PASSAGEIROS                                     4.373e+03
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE DE CARGA                                                    6.195e+03
-## descricao_ocupacaoMOTORISTA PARTICULAR                                                                                  4.041e+03
-## descricao_ocupacaoNUTRICIONISTA E ASSEMELHADOS                                                                          7.591e+03
-## descricao_ocupacaoOCEANÃ\u0093GRAFO                                                                                     1.075e+04
-## descricao_ocupacaoOCUPANTE DE CARGO EM COMISSÃ\u0083O                                                                   5.293e+03
-## descricao_ocupacaoODONTÃ\u0093LOGO                                                                                      3.093e+03
-## descricao_ocupacaoOPERADOR DE APARELHOS DE PRODUÃ\u0087Ã\u0083O INDUSTRIAL                                              1.075e+04
-## descricao_ocupacaoOPERADOR DE COMPUTADOR                                                                                1.075e+04
-## descricao_ocupacaoOPERADOR DE EQUIPAMENTO DE RÃ\u0081DIO, TELEVISÃ\u0083O, SOM E CINEMA                                 1.075e+04
-## descricao_ocupacaoOUTROS                                                                                                6.573e-01
-## descricao_ocupacaoPADEIRO, CONFEITEIRO E ASSEMELHADOS                                                                   1.075e+04
-## descricao_ocupacaoPECUARISTA                                                                                            1.302e+00
-## descricao_ocupacaoPEDAGOGO                                                                                              1.186e+00
-## descricao_ocupacaoPESCADOR                                                                                              7.519e+03
-## descricao_ocupacaoPETROLEIRO                                                                                            1.075e+04
-## descricao_ocupacaoPILOTO DE AVIAÃ\u0087Ã\u0083O COMERCIAL, NAVEGADOR, MECÃ\u0082NICO DE VÃ\u0094O E ASSEMELHADOS        1.075e+04
-## descricao_ocupacaoPOLICIAL CIVIL                                                                                        9.452e-01
-## descricao_ocupacaoPOLICIAL MILITAR                                                                                      1.160e+00
-## descricao_ocupacaoPORTEIRO DE EDIFÃ\u008dCIO, ASCENSORISTA, GARAGISTA E ZELADOR                                         7.567e+03
-## descricao_ocupacaoPRODUTOR AGROPECUÃ\u0081RIO                                                                           4.783e+03
-## descricao_ocupacaoPRODUTOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                          7.578e+03
-## descricao_ocupacaoPROFESSOR DE ENSINO FUNDAMENTAL                                                                       1.444e+03
-## descricao_ocupacaoPROFESSOR DE ENSINO MÃ\u0089DIO                                                                       9.251e-01
-## descricao_ocupacaoPROFESSOR DE ENSINO SUPERIOR                                                                          7.526e-01
-## descricao_ocupacaoPROFESSOR E INSTRUTOR DE FORMAÃ\u0087Ã\u0083O PROFISSIONAL                                            2.999e+03
-## descricao_ocupacaoPROGRAMADOR DE COMPUTADOR                                                                             1.075e+04
-## descricao_ocupacaoPSICÃ\u0093LOGO                                                                                       1.095e+00
-## descricao_ocupacaoPUBLICITÃ\u0081RIO                                                                                    2.096e+00
-## descricao_ocupacaoQUÃ\u008dMICO                                                                                         1.075e+04
-## descricao_ocupacaoRECEPCIONISTA                                                                                         6.149e+03
-## descricao_ocupacaoRELAÃ\u0087Ã\u0095ES-PÃ\u009aBLICAS                                                                   1.075e+04
-## descricao_ocupacaoREPRESENTANTE COMERCIAL                                                                               1.332e+00
-## descricao_ocupacaoSACERDOTE OU MEMBRO DE ORDEM OU SEITA RELIGIOSA                                                       1.194e+00
-## descricao_ocupacaoSECRETÃ\u0081RIO E DATILÃ\u0093GRAFO                                                                  2.761e+03
-## descricao_ocupacaoSENADOR                                                                                               6.037e+03
-## descricao_ocupacaoSERRALHEIRO                                                                                           1.075e+04
-## descricao_ocupacaoSERVENTUÃ\u0081RIO DE JUSTIÃ\u0087A                                                                   1.075e+04
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO CIVIL APOSENTADO                                                               9.690e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO ESTADUAL                                                                       9.150e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO FEDERAL                                                                        8.024e-01
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO MUNICIPAL                                                                      1.492e+03
-## descricao_ocupacaoSOCIÃ\u0093LOGO                                                                                       7.587e+03
-## descricao_ocupacaoSUPERVISOR, INSPETOR E AGENTE DE COMPRAS E VENDAS                                                     6.185e+03
-## descricao_ocupacaoTÃ\u0089CNICO CONTABILIDADE, ESTATÃ\u008dSTICA, ECONOMIA DOMÃ\u0089STICA E ADMINISTRAÃ\u0087Ã\u0083O  3.359e+03
-## descricao_ocupacaoTÃ\u0089CNICO DE ELETRICIDADE, ELETRÃ\u0094NICA E TELECOMUNICAÃ\u0087Ã\u0095ES                        3.781e+03
-## descricao_ocupacaoTÃ\u0089CNICO DE ENFERMAGEM E ASSEMELHADOS (EXCETO ENFERMEIRO)                                        3.081e+03
-## descricao_ocupacaoTÃ\u0089CNICO DE LABORATÃ\u0093RIO E RAIOS X                                                          1.075e+04
-## descricao_ocupacaoTÃ\u0089CNICO DE MECÃ\u0082NICA                                                                       1.075e+04
-## descricao_ocupacaoTÃ\u0089CNICO DE MINERAÃ\u0087Ã\u0083O, METALURGIA E GEOLOGIA                                         1.075e+04
-## descricao_ocupacaoTÃ\u0089CNICO DE QUÃ\u008dMICA                                                                        1.075e+04
-## descricao_ocupacaoTÃ\u0089CNICO EM AGRONOMIA E AGRIMENSURA                                                              4.987e+03
-## descricao_ocupacaoTÃ\u0089CNICO EM EDIFICAÃ\u0087Ã\u0095ES                                                              1.075e+04
-## descricao_ocupacaoTÃ\u0089CNICO EM INFORMÃ\u0081TICA                                                                    5.370e+03
-## descricao_ocupacaoTAXISTA                                                                                               5.360e+03
-## descricao_ocupacaoTERAPEUTA                                                                                             1.075e+04
-## descricao_ocupacaoTORNEIRO MECÃ\u0082NICO                                                                               1.075e+04
-## descricao_ocupacaoTRABALHADOR DE CONSTRUÃ\u0087Ã\u0083O CIVIL                                                           4.029e+03
-## descricao_ocupacaoTRABALHADOR DE FABRICAÃ\u0087Ã\u0083O DE ROUPAS                                                       7.562e+03
-## descricao_ocupacaoTRABALHADOR DOS SERVIÃ\u0087OS DE CONTABILIDADE, DE CAIXA E ASSEMELHADOS                              7.582e+03
-## descricao_ocupacaoTRABALHADOR EM ATIVIDADE DE PROCESSAMENTO QUÃ\u008dMICO                                               1.075e+04
-## descricao_ocupacaoTRABALHADOR METALÃ\u009aRGICO E SIDERÃ\u009aRGICO                                                     6.188e+03
-## descricao_ocupacaoTRABALHADOR RURAL                                                                                     1.075e+04
-## descricao_ocupacaoVENDEDOR DE COMÃ\u0089RCIO VAREJISTA E ATACADISTA                                                     3.216e+03
-## descricao_ocupacaoVENDEDOR PRACISTA, REPRESENTANTE, CAIXEIRO-VIAJANTE E ASSEMELHADOS                                    3.356e+03
-## descricao_ocupacaoVEREADOR                                                                                              6.732e-01
-## descricao_ocupacaoVETERINÃ\u0081RIO                                                                                     5.996e+03
-## descricao_ocupacaoVIGILANTE                                                                                             4.036e+03
-## descricao_cor_racaBRANCA                                                                                                2.028e+03
-## descricao_cor_racaINDÃ\u008dGENA                                                                                        4.271e+03
-## descricao_cor_racaPARDA                                                                                                 2.028e+03
-## descricao_cor_racaPRETA                                                                                                 2.028e+03
-## despesa_max_campanha                                                                                                    4.349e-08
-##                                                                                                                        z value
-## (Intercept)                                                                                                              0.010
-## total_receita                                                                                                          -13.361
-## descricao_ocupacaoADVOGADO                                                                                              -1.164
-## descricao_ocupacaoAGENTE ADMINISTRATIVO                                                                                  0.006
-## descricao_ocupacaoAGENTE DE SAÃ\u009aDE E SANITARISTA                                                                    0.003
-## descricao_ocupacaoAGENTE DE SERVIÃ\u0087OS FUNERÃ\u0081RIOS E EMBALSAMADOR                                               0.002
-## descricao_ocupacaoAGENTE DE VIAGEM                                                                                       0.001
-## descricao_ocupacaoAGENTE POSTAL                                                                                          0.004
-## descricao_ocupacaoAGRÃ\u0094NOMO                                                                                        -1.642
-## descricao_ocupacaoAGRICULTOR                                                                                            -0.512
-## descricao_ocupacaoALMOXARIFE                                                                                             0.001
-## descricao_ocupacaoANALISTA DE SISTEMAS                                                                                   0.003
-## descricao_ocupacaoAPOSENTADO (EXCETO SERVIDOR PÃ\u009aBLICO)                                                             0.012
-## descricao_ocupacaoARQUITETO                                                                                             -1.231
-## descricao_ocupacaoARTESÃ\u0083O                                                                                          0.004
-## descricao_ocupacaoARTISTA PLÃ\u0081STICO E ASSEMELHADOS                                                                  0.002
-## descricao_ocupacaoASSISTENTE SOCIAL                                                                                     -0.569
-## descricao_ocupacaoATLETA PROFISSIONAL E TÃ\u0089CNICO EM DESPORTOS                                                       0.003
-## descricao_ocupacaoATOR E DIRETOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                     0.004
-## descricao_ocupacaoAUXILIAR DE ESCRITÃ\u0093RIO E ASSEMELHADOS                                                            0.009
-## descricao_ocupacaoAUXILIAR DE LABORATÃ\u0093RIO                                                                          0.001
-## descricao_ocupacaoBANCÃ\u0081RIO E ECONOMIÃ\u0081RIO                                                                    -0.490
-## descricao_ocupacaoBIÃ\u0093LOGO                                                                                          0.004
-## descricao_ocupacaoBIBLIOTECÃ\u0081RIO                                                                                    0.001
-## descricao_ocupacaoBIOMÃ\u0089DICO                                                                                        0.002
-## descricao_ocupacaoBOMBEIRO CIVIL                                                                                         0.002
-## descricao_ocupacaoBOMBEIRO MILITAR                                                                                       0.005
-## descricao_ocupacaoCABELEIREIRO E BARBEIRO                                                                                0.005
-## descricao_ocupacaoCANTOR E COMPOSITOR                                                                                    0.005
-## descricao_ocupacaoCATADOR DE RECICLÃ\u0081VEIS                                                                           0.001
-## descricao_ocupacaoCIENTISTA POLÃ\u008dTICO                                                                               0.002
-## descricao_ocupacaoCOBRADOR DE TRANSPORTE COLETIVO                                                                        0.003
-## descricao_ocupacaoCOMERCIANTE                                                                                            0.658
-## descricao_ocupacaoCOMERCIÃ\u0081RIO                                                                                      0.005
-## descricao_ocupacaoCOMUNICÃ\u0093LOGO                                                                                     0.003
-## descricao_ocupacaoCONTADOR                                                                                               0.008
-## descricao_ocupacaoCORRETOR DE IMÃ\u0093VEIS, SEGUROS, TÃ\u008dTULOS E VALORES                                           -1.136
-## descricao_ocupacaoCOZINHEIRO                                                                                             0.002
-## descricao_ocupacaoDEPUTADO                                                                                              -4.881
-## descricao_ocupacaoDESENHISTA                                                                                             0.001
-## descricao_ocupacaoDESPACHANTE                                                                                            0.002
-## descricao_ocupacaoDIGITADOR                                                                                              0.002
-## descricao_ocupacaoDIPLOMATA                                                                                              0.002
-## descricao_ocupacaoDIRETOR DE EMPRESAS                                                                                    0.005
-## descricao_ocupacaoDIRETOR DE ESTABELECIMENTO DE ENSINO                                                                   0.001
-## descricao_ocupacaoDONA DE CASA                                                                                           0.011
-## descricao_ocupacaoECONOMISTA                                                                                             0.567
-## descricao_ocupacaoECONOMISTA DOMÃ\u0089STICO                                                                             0.001
-## descricao_ocupacaoELETRICISTA E ASSEMELHADOS                                                                             0.003
-## descricao_ocupacaoEMPREGADO DOMÃ\u0089STICO                                                                              0.002
-## descricao_ocupacaoEMPRESÃ\u0081RIO                                                                                      -0.086
-## descricao_ocupacaoENFERMEIRO                                                                                            -0.244
-## descricao_ocupacaoENGENHEIRO                                                                                            -0.178
-## descricao_ocupacaoESCRITOR E CRÃ\u008dTICO                                                                               0.003
-## descricao_ocupacaoESTETICISTA                                                                                            0.002
-## descricao_ocupacaoESTIVADOR, CARREGADOR E ASSEMELHADOS                                                                   0.001
-## descricao_ocupacaoESTOFADOR                                                                                              0.001
-## descricao_ocupacaoESTUDANTE, BOLSISTA, ESTAGIÃ\u0081RIO E ASSEMELHADOS                                                   0.508
-## descricao_ocupacaoFARMACÃ\u008aUTICO                                                                                     0.126
-## descricao_ocupacaoFERROVIÃ\u0081RIO                                                                                      0.002
-## descricao_ocupacaoFISCAL                                                                                                 0.003
-## descricao_ocupacaoFISIOTERAPEUTA E TERAPEUTA OCUPACIONAL                                                                 0.002
-## descricao_ocupacaoFOTÃ\u0093GRAFO E ASSEMELHADOS                                                                         0.003
-## descricao_ocupacaoGARÃ\u0087OM                                                                                           0.002
-## descricao_ocupacaoGARI OU LIXEIRO                                                                                        0.001
-## descricao_ocupacaoGEÃ\u0093GRAFO                                                                                         0.001
-## descricao_ocupacaoGEÃ\u0093LOGO                                                                                          0.002
-## descricao_ocupacaoGEOFÃ\u008dSICO                                                                                        0.002
-## descricao_ocupacaoGERENTE                                                                                                0.004
-## descricao_ocupacaoGUIA DE TURISMO                                                                                        0.001
-## descricao_ocupacaoHISTORIADOR                                                                                            0.002
-## descricao_ocupacaoINDUSTRIAL                                                                                            -1.332
-## descricao_ocupacaoJORNALEIRO                                                                                             0.001
-## descricao_ocupacaoJORNALISTA E REDATOR                                                                                  -1.515
-## descricao_ocupacaoLOCUTOR E COMENTARISTA DE RÃ\u0081DIO E TELEVISÃ\u0083O E RADIALISTA                                  -0.788
-## descricao_ocupacaoMÃ\u0089DICO                                                                                          -1.093
-## descricao_ocupacaoMANICURE E MAQUILADOR                                                                                  0.002
-## descricao_ocupacaoMÃ\u009aSICO                                                                                           0.004
-## descricao_ocupacaoMASSAGISTA                                                                                             0.001
-## descricao_ocupacaoMECÃ\u0082NICO DE MANUTENÃ\u0087Ã\u0083O                                                               0.002
-## descricao_ocupacaoMEMBRO DAS FORÃ\u0087AS ARMADAS                                                                        0.005
-## descricao_ocupacaoMEMBRO DO MINISTÃ\u0089RIO PÃ\u009aBLICO                                                               0.002
-## descricao_ocupacaoMETEOROLOGISTA                                                                                         0.001
-## descricao_ocupacaoMILITAR REFORMADO                                                                                      0.005
-## descricao_ocupacaoMOTOBOY                                                                                                0.001
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE COLETIVO DE PASSAGEIROS                                      0.004
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE DE CARGA                                                     0.003
-## descricao_ocupacaoMOTORISTA PARTICULAR                                                                                   0.004
-## descricao_ocupacaoNUTRICIONISTA E ASSEMELHADOS                                                                           0.002
-## descricao_ocupacaoOCEANÃ\u0093GRAFO                                                                                      0.001
-## descricao_ocupacaoOCUPANTE DE CARGO EM COMISSÃ\u0083O                                                                    0.003
-## descricao_ocupacaoODONTÃ\u0093LOGO                                                                                       0.005
-## descricao_ocupacaoOPERADOR DE APARELHOS DE PRODUÃ\u0087Ã\u0083O INDUSTRIAL                                               0.001
-## descricao_ocupacaoOPERADOR DE COMPUTADOR                                                                                 0.001
-## descricao_ocupacaoOPERADOR DE EQUIPAMENTO DE RÃ\u0081DIO, TELEVISÃ\u0083O, SOM E CINEMA                                  0.001
-## descricao_ocupacaoOUTROS                                                                                                 0.689
-## descricao_ocupacaoPADEIRO, CONFEITEIRO E ASSEMELHADOS                                                                    0.001
-## descricao_ocupacaoPECUARISTA                                                                                            -1.115
-## descricao_ocupacaoPEDAGOGO                                                                                              -0.658
-## descricao_ocupacaoPESCADOR                                                                                               0.002
-## descricao_ocupacaoPETROLEIRO                                                                                             0.001
-## descricao_ocupacaoPILOTO DE AVIAÃ\u0087Ã\u0083O COMERCIAL, NAVEGADOR, MECÃ\u0082NICO DE VÃ\u0094O E ASSEMELHADOS         0.001
-## descricao_ocupacaoPOLICIAL CIVIL                                                                                        -1.505
-## descricao_ocupacaoPOLICIAL MILITAR                                                                                       0.388
-## descricao_ocupacaoPORTEIRO DE EDIFÃ\u008dCIO, ASCENSORISTA, GARAGISTA E ZELADOR                                          0.002
-## descricao_ocupacaoPRODUTOR AGROPECUÃ\u0081RIO                                                                            0.003
-## descricao_ocupacaoPRODUTOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                           0.002
-## descricao_ocupacaoPROFESSOR DE ENSINO FUNDAMENTAL                                                                        0.011
-## descricao_ocupacaoPROFESSOR DE ENSINO MÃ\u0089DIO                                                                        0.555
-## descricao_ocupacaoPROFESSOR DE ENSINO SUPERIOR                                                                          -0.735
-## descricao_ocupacaoPROFESSOR E INSTRUTOR DE FORMAÃ\u0087Ã\u0083O PROFISSIONAL                                             0.005
-## descricao_ocupacaoPROGRAMADOR DE COMPUTADOR                                                                              0.002
-## descricao_ocupacaoPSICÃ\u0093LOGO                                                                                       -0.947
-## descricao_ocupacaoPUBLICITÃ\u0081RIO                                                                                     0.544
-## descricao_ocupacaoQUÃ\u008dMICO                                                                                          0.002
-## descricao_ocupacaoRECEPCIONISTA                                                                                          0.003
-## descricao_ocupacaoRELAÃ\u0087Ã\u0095ES-PÃ\u009aBLICAS                                                                    0.001
-## descricao_ocupacaoREPRESENTANTE COMERCIAL                                                                               -0.424
-## descricao_ocupacaoSACERDOTE OU MEMBRO DE ORDEM OU SEITA RELIGIOSA                                                       -0.992
-## descricao_ocupacaoSECRETÃ\u0081RIO E DATILÃ\u0093GRAFO                                                                   0.006
-## descricao_ocupacaoSENADOR                                                                                               -0.003
-## descricao_ocupacaoSERRALHEIRO                                                                                            0.001
-## descricao_ocupacaoSERVENTUÃ\u0081RIO DE JUSTIÃ\u0087A                                                                    0.001
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO CIVIL APOSENTADO                                                               -0.927
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO ESTADUAL                                                                        0.732
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO FEDERAL                                                                        -0.262
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO MUNICIPAL                                                                       0.011
-## descricao_ocupacaoSOCIÃ\u0093LOGO                                                                                        0.002
-## descricao_ocupacaoSUPERVISOR, INSPETOR E AGENTE DE COMPRAS E VENDAS                                                      0.003
-## descricao_ocupacaoTÃ\u0089CNICO CONTABILIDADE, ESTATÃ\u008dSTICA, ECONOMIA DOMÃ\u0089STICA E ADMINISTRAÃ\u0087Ã\u0083O   0.005
-## descricao_ocupacaoTÃ\u0089CNICO DE ELETRICIDADE, ELETRÃ\u0094NICA E TELECOMUNICAÃ\u0087Ã\u0095ES                         0.004
-## descricao_ocupacaoTÃ\u0089CNICO DE ENFERMAGEM E ASSEMELHADOS (EXCETO ENFERMEIRO)                                         0.005
-## descricao_ocupacaoTÃ\u0089CNICO DE LABORATÃ\u0093RIO E RAIOS X                                                           0.001
-## descricao_ocupacaoTÃ\u0089CNICO DE MECÃ\u0082NICA                                                                        0.002
-## descricao_ocupacaoTÃ\u0089CNICO DE MINERAÃ\u0087Ã\u0083O, METALURGIA E GEOLOGIA                                          0.001
-## descricao_ocupacaoTÃ\u0089CNICO DE QUÃ\u008dMICA                                                                         0.001
-## descricao_ocupacaoTÃ\u0089CNICO EM AGRONOMIA E AGRIMENSURA                                                               0.004
-## descricao_ocupacaoTÃ\u0089CNICO EM EDIFICAÃ\u0087Ã\u0095ES                                                               0.001
-## descricao_ocupacaoTÃ\u0089CNICO EM INFORMÃ\u0081TICA                                                                     0.003
-## descricao_ocupacaoTAXISTA                                                                                                0.003
-## descricao_ocupacaoTERAPEUTA                                                                                              0.001
-## descricao_ocupacaoTORNEIRO MECÃ\u0082NICO                                                                                0.001
-## descricao_ocupacaoTRABALHADOR DE CONSTRUÃ\u0087Ã\u0083O CIVIL                                                            0.004
-## descricao_ocupacaoTRABALHADOR DE FABRICAÃ\u0087Ã\u0083O DE ROUPAS                                                        0.002
-## descricao_ocupacaoTRABALHADOR DOS SERVIÃ\u0087OS DE CONTABILIDADE, DE CAIXA E ASSEMELHADOS                               0.002
-## descricao_ocupacaoTRABALHADOR EM ATIVIDADE DE PROCESSAMENTO QUÃ\u008dMICO                                                0.002
-## descricao_ocupacaoTRABALHADOR METALÃ\u009aRGICO E SIDERÃ\u009aRGICO                                                      0.003
-## descricao_ocupacaoTRABALHADOR RURAL                                                                                      0.001
-## descricao_ocupacaoVENDEDOR DE COMÃ\u0089RCIO VAREJISTA E ATACADISTA                                                      0.005
-## descricao_ocupacaoVENDEDOR PRACISTA, REPRESENTANTE, CAIXEIRO-VIAJANTE E ASSEMELHADOS                                     0.005
-## descricao_ocupacaoVEREADOR                                                                                              -0.276
-## descricao_ocupacaoVETERINÃ\u0081RIO                                                                                      0.003
-## descricao_ocupacaoVIGILANTE                                                                                              0.004
-## descricao_cor_racaBRANCA                                                                                                -0.009
-## descricao_cor_racaINDÃ\u008dGENA                                                                                        -0.001
-## descricao_cor_racaPARDA                                                                                                 -0.009
-## descricao_cor_racaPRETA                                                                                                 -0.008
-## despesa_max_campanha                                                                                                     2.598
-##                                                                                                                        Pr(&gt;|z|)
-## (Intercept)                                                                                                             0.99180
-## total_receita                                                                                                           &lt; 2e-16
-## descricao_ocupacaoADVOGADO                                                                                              0.24430
-## descricao_ocupacaoAGENTE ADMINISTRATIVO                                                                                 0.99495
-## descricao_ocupacaoAGENTE DE SAÃ\u009aDE E SANITARISTA                                                                   0.99731
-## descricao_ocupacaoAGENTE DE SERVIÃ\u0087OS FUNERÃ\u0081RIOS E EMBALSAMADOR                                              0.99831
-## descricao_ocupacaoAGENTE DE VIAGEM                                                                                      0.99884
-## descricao_ocupacaoAGENTE POSTAL                                                                                         0.99684
-## descricao_ocupacaoAGRÃ\u0094NOMO                                                                                        0.10066
-## descricao_ocupacaoAGRICULTOR                                                                                            0.60861
-## descricao_ocupacaoALMOXARIFE                                                                                            0.99889
-## descricao_ocupacaoANALISTA DE SISTEMAS                                                                                  0.99759
-## descricao_ocupacaoAPOSENTADO (EXCETO SERVIDOR PÃ\u009aBLICO)                                                            0.99044
-## descricao_ocupacaoARQUITETO                                                                                             0.21837
-## descricao_ocupacaoARTESÃ\u0083O                                                                                         0.99666
-## descricao_ocupacaoARTISTA PLÃ\u0081STICO E ASSEMELHADOS                                                                 0.99829
-## descricao_ocupacaoASSISTENTE SOCIAL                                                                                     0.56926
-## descricao_ocupacaoATLETA PROFISSIONAL E TÃ\u0089CNICO EM DESPORTOS                                                      0.99767
-## descricao_ocupacaoATOR E DIRETOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                    0.99654
-## descricao_ocupacaoAUXILIAR DE ESCRITÃ\u0093RIO E ASSEMELHADOS                                                           0.99320
-## descricao_ocupacaoAUXILIAR DE LABORATÃ\u0093RIO                                                                         0.99885
-## descricao_ocupacaoBANCÃ\u0081RIO E ECONOMIÃ\u0081RIO                                                                    0.62391
-## descricao_ocupacaoBIÃ\u0093LOGO                                                                                         0.99682
-## descricao_ocupacaoBIBLIOTECÃ\u0081RIO                                                                                   0.99884
-## descricao_ocupacaoBIOMÃ\u0089DICO                                                                                       0.99834
-## descricao_ocupacaoBOMBEIRO CIVIL                                                                                        0.99837
-## descricao_ocupacaoBOMBEIRO MILITAR                                                                                      0.99606
-## descricao_ocupacaoCABELEIREIRO E BARBEIRO                                                                               0.99594
-## descricao_ocupacaoCANTOR E COMPOSITOR                                                                                   0.99565
-## descricao_ocupacaoCATADOR DE RECICLÃ\u0081VEIS                                                                          0.99883
-## descricao_ocupacaoCIENTISTA POLÃ\u008dTICO                                                                              0.99865
-## descricao_ocupacaoCOBRADOR DE TRANSPORTE COLETIVO                                                                       0.99796
-## descricao_ocupacaoCOMERCIANTE                                                                                           0.51031
-## descricao_ocupacaoCOMERCIÃ\u0081RIO                                                                                     0.99566
-## descricao_ocupacaoCOMUNICÃ\u0093LOGO                                                                                    0.99789
-## descricao_ocupacaoCONTADOR                                                                                              0.99348
-## descricao_ocupacaoCORRETOR DE IMÃ\u0093VEIS, SEGUROS, TÃ\u008dTULOS E VALORES                                           0.25579
-## descricao_ocupacaoCOZINHEIRO                                                                                            0.99827
-## descricao_ocupacaoDEPUTADO                                                                                             1.05e-06
-## descricao_ocupacaoDESENHISTA                                                                                            0.99885
-## descricao_ocupacaoDESPACHANTE                                                                                           0.99833
-## descricao_ocupacaoDIGITADOR                                                                                             0.99879
-## descricao_ocupacaoDIPLOMATA                                                                                             0.99879
-## descricao_ocupacaoDIRETOR DE EMPRESAS                                                                                   0.99580
-## descricao_ocupacaoDIRETOR DE ESTABELECIMENTO DE ENSINO                                                                  0.99883
-## descricao_ocupacaoDONA DE CASA                                                                                          0.99145
-## descricao_ocupacaoECONOMISTA                                                                                            0.57058
-## descricao_ocupacaoECONOMISTA DOMÃ\u0089STICO                                                                            0.99888
-## descricao_ocupacaoELETRICISTA E ASSEMELHADOS                                                                            0.99739
-## descricao_ocupacaoEMPREGADO DOMÃ\u0089STICO                                                                             0.99837
-## descricao_ocupacaoEMPRESÃ\u0081RIO                                                                                      0.93149
-## descricao_ocupacaoENFERMEIRO                                                                                            0.80746
-## descricao_ocupacaoENGENHEIRO                                                                                            0.85860
-## descricao_ocupacaoESCRITOR E CRÃ\u008dTICO                                                                              0.99793
-## descricao_ocupacaoESTETICISTA                                                                                           0.99834
-## descricao_ocupacaoESTIVADOR, CARREGADOR E ASSEMELHADOS                                                                  0.99886
-## descricao_ocupacaoESTOFADOR                                                                                             0.99882
-## descricao_ocupacaoESTUDANTE, BOLSISTA, ESTAGIÃ\u0081RIO E ASSEMELHADOS                                                  0.61148
-## descricao_ocupacaoFARMACÃ\u008aUTICO                                                                                    0.90011
-## descricao_ocupacaoFERROVIÃ\u0081RIO                                                                                     0.99831
-## descricao_ocupacaoFISCAL                                                                                                0.99726
-## descricao_ocupacaoFISIOTERAPEUTA E TERAPEUTA OCUPACIONAL                                                                0.99833
-## descricao_ocupacaoFOTÃ\u0093GRAFO E ASSEMELHADOS                                                                        0.99798
-## descricao_ocupacaoGARÃ\u0087OM                                                                                          0.99832
-## descricao_ocupacaoGARI OU LIXEIRO                                                                                       0.99885
-## descricao_ocupacaoGEÃ\u0093GRAFO                                                                                        0.99884
-## descricao_ocupacaoGEÃ\u0093LOGO                                                                                         0.99828
-## descricao_ocupacaoGEOFÃ\u008dSICO                                                                                       0.99878
-## descricao_ocupacaoGERENTE                                                                                               0.99713
-## descricao_ocupacaoGUIA DE TURISMO                                                                                       0.99883
-## descricao_ocupacaoHISTORIADOR                                                                                           0.99829
-## descricao_ocupacaoINDUSTRIAL                                                                                            0.18274
-## descricao_ocupacaoJORNALEIRO                                                                                            0.99880
-## descricao_ocupacaoJORNALISTA E REDATOR                                                                                  0.12982
-## descricao_ocupacaoLOCUTOR E COMENTARISTA DE RÃ\u0081DIO E TELEVISÃ\u0083O E RADIALISTA                                  0.43089
-## descricao_ocupacaoMÃ\u0089DICO                                                                                          0.27444
-## descricao_ocupacaoMANICURE E MAQUILADOR                                                                                 0.99833
-## descricao_ocupacaoMÃ\u009aSICO                                                                                          0.99703
-## descricao_ocupacaoMASSAGISTA                                                                                            0.99884
-## descricao_ocupacaoMECÃ\u0082NICO DE MANUTENÃ\u0087Ã\u0083O                                                              0.99830
-## descricao_ocupacaoMEMBRO DAS FORÃ\u0087AS ARMADAS                                                                       0.99623
-## descricao_ocupacaoMEMBRO DO MINISTÃ\u0089RIO PÃ\u009aBLICO                                                              0.99824
-## descricao_ocupacaoMETEOROLOGISTA                                                                                        0.99882
-## descricao_ocupacaoMILITAR REFORMADO                                                                                     0.99605
-## descricao_ocupacaoMOTOBOY                                                                                               0.99882
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE COLETIVO DE PASSAGEIROS                                     0.99710
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE DE CARGA                                                    0.99792
-## descricao_ocupacaoMOTORISTA PARTICULAR                                                                                  0.99694
-## descricao_ocupacaoNUTRICIONISTA E ASSEMELHADOS                                                                          0.99833
-## descricao_ocupacaoOCEANÃ\u0093GRAFO                                                                                     0.99883
-## descricao_ocupacaoOCUPANTE DE CARGO EM COMISSÃ\u0083O                                                                   0.99749
-## descricao_ocupacaoODONTÃ\u0093LOGO                                                                                      0.99584
-## descricao_ocupacaoOPERADOR DE APARELHOS DE PRODUÃ\u0087Ã\u0083O INDUSTRIAL                                              0.99886
-## descricao_ocupacaoOPERADOR DE COMPUTADOR                                                                                0.99883
-## descricao_ocupacaoOPERADOR DE EQUIPAMENTO DE RÃ\u0081DIO, TELEVISÃ\u0083O, SOM E CINEMA                                 0.99885
-## descricao_ocupacaoOUTROS                                                                                                0.49082
-## descricao_ocupacaoPADEIRO, CONFEITEIRO E ASSEMELHADOS                                                                   0.99881
-## descricao_ocupacaoPECUARISTA                                                                                            0.26478
-## descricao_ocupacaoPEDAGOGO                                                                                              0.51078
-## descricao_ocupacaoPESCADOR                                                                                              0.99826
-## descricao_ocupacaoPETROLEIRO                                                                                            0.99883
-## descricao_ocupacaoPILOTO DE AVIAÃ\u0087Ã\u0083O COMERCIAL, NAVEGADOR, MECÃ\u0082NICO DE VÃ\u0094O E ASSEMELHADOS        0.99881
-## descricao_ocupacaoPOLICIAL CIVIL                                                                                        0.13221
-## descricao_ocupacaoPOLICIAL MILITAR                                                                                      0.69806
-## descricao_ocupacaoPORTEIRO DE EDIFÃ\u008dCIO, ASCENSORISTA, GARAGISTA E ZELADOR                                         0.99830
-## descricao_ocupacaoPRODUTOR AGROPECUÃ\u0081RIO                                                                           0.99733
-## descricao_ocupacaoPRODUTOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                          0.99830
-## descricao_ocupacaoPROFESSOR DE ENSINO FUNDAMENTAL                                                                       0.99122
-## descricao_ocupacaoPROFESSOR DE ENSINO MÃ\u0089DIO                                                                       0.57895
-## descricao_ocupacaoPROFESSOR DE ENSINO SUPERIOR                                                                          0.46240
-## descricao_ocupacaoPROFESSOR E INSTRUTOR DE FORMAÃ\u0087Ã\u0083O PROFISSIONAL                                            0.99571
-## descricao_ocupacaoPROGRAMADOR DE COMPUTADOR                                                                             0.99880
-## descricao_ocupacaoPSICÃ\u0093LOGO                                                                                       0.34375
-## descricao_ocupacaoPUBLICITÃ\u0081RIO                                                                                    0.58625
-## descricao_ocupacaoQUÃ\u008dMICO                                                                                         0.99876
-## descricao_ocupacaoRECEPCIONISTA                                                                                         0.99798
-## descricao_ocupacaoRELAÃ\u0087Ã\u0095ES-PÃ\u009aBLICAS                                                                   0.99881
-## descricao_ocupacaoREPRESENTANTE COMERCIAL                                                                               0.67128
-## descricao_ocupacaoSACERDOTE OU MEMBRO DE ORDEM OU SEITA RELIGIOSA                                                       0.32144
-## descricao_ocupacaoSECRETÃ\u0081RIO E DATILÃ\u0093GRAFO                                                                  0.99540
-## descricao_ocupacaoSENADOR                                                                                               0.99761
-## descricao_ocupacaoSERRALHEIRO                                                                                           0.99882
-## descricao_ocupacaoSERVENTUÃ\u0081RIO DE JUSTIÃ\u0087A                                                                   0.99883
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO CIVIL APOSENTADO                                                               0.35375
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO ESTADUAL                                                                       0.46438
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO FEDERAL                                                                        0.79369
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO MUNICIPAL                                                                      0.99147
-## descricao_ocupacaoSOCIÃ\u0093LOGO                                                                                       0.99829
-## descricao_ocupacaoSUPERVISOR, INSPETOR E AGENTE DE COMPRAS E VENDAS                                                     0.99792
-## descricao_ocupacaoTÃ\u0089CNICO CONTABILIDADE, ESTATÃ\u008dSTICA, ECONOMIA DOMÃ\u0089STICA E ADMINISTRAÃ\u0087Ã\u0083O  0.99611
-## descricao_ocupacaoTÃ\u0089CNICO DE ELETRICIDADE, ELETRÃ\u0094NICA E TELECOMUNICAÃ\u0087Ã\u0095ES                        0.99663
-## descricao_ocupacaoTÃ\u0089CNICO DE ENFERMAGEM E ASSEMELHADOS (EXCETO ENFERMEIRO)                                        0.99587
-## descricao_ocupacaoTÃ\u0089CNICO DE LABORATÃ\u0093RIO E RAIOS X                                                          0.99883
-## descricao_ocupacaoTÃ\u0089CNICO DE MECÃ\u0082NICA                                                                       0.99878
-## descricao_ocupacaoTÃ\u0089CNICO DE MINERAÃ\u0087Ã\u0083O, METALURGIA E GEOLOGIA                                         0.99882
-## descricao_ocupacaoTÃ\u0089CNICO DE QUÃ\u008dMICA                                                                        0.99883
-## descricao_ocupacaoTÃ\u0089CNICO EM AGRONOMIA E AGRIMENSURA                                                              0.99699
-## descricao_ocupacaoTÃ\u0089CNICO EM EDIFICAÃ\u0087Ã\u0095ES                                                              0.99884
-## descricao_ocupacaoTÃ\u0089CNICO EM INFORMÃ\u0081TICA                                                                    0.99763
-## descricao_ocupacaoTAXISTA                                                                                               0.99767
-## descricao_ocupacaoTERAPEUTA                                                                                             0.99882
-## descricao_ocupacaoTORNEIRO MECÃ\u0082NICO                                                                               0.99887
-## descricao_ocupacaoTRABALHADOR DE CONSTRUÃ\u0087Ã\u0083O CIVIL                                                           0.99682
-## descricao_ocupacaoTRABALHADOR DE FABRICAÃ\u0087Ã\u0083O DE ROUPAS                                                       0.99831
-## descricao_ocupacaoTRABALHADOR DOS SERVIÃ\u0087OS DE CONTABILIDADE, DE CAIXA E ASSEMELHADOS                              0.99832
-## descricao_ocupacaoTRABALHADOR EM ATIVIDADE DE PROCESSAMENTO QUÃ\u008dMICO                                               0.99880
-## descricao_ocupacaoTRABALHADOR METALÃ\u009aRGICO E SIDERÃ\u009aRGICO                                                     0.99789
-## descricao_ocupacaoTRABALHADOR RURAL                                                                                     0.99881
-## descricao_ocupacaoVENDEDOR DE COMÃ\u0089RCIO VAREJISTA E ATACADISTA                                                     0.99608
-## descricao_ocupacaoVENDEDOR PRACISTA, REPRESENTANTE, CAIXEIRO-VIAJANTE E ASSEMELHADOS                                    0.99627
-## descricao_ocupacaoVEREADOR                                                                                              0.78259
-## descricao_ocupacaoVETERINÃ\u0081RIO                                                                                     0.99766
-## descricao_ocupacaoVIGILANTE                                                                                             0.99687
-## descricao_cor_racaBRANCA                                                                                                0.99301
-## descricao_cor_racaINDÃ\u008dGENA                                                                                        0.99952
-## descricao_cor_racaPARDA                                                                                                 0.99319
-## descricao_cor_racaPRETA                                                                                                 0.99331
-## despesa_max_campanha                                                                                                    0.00938
-##                                                                                                                           
-## (Intercept)                                                                                                               
-## total_receita                                                                                                          ***
-## descricao_ocupacaoADVOGADO                                                                                                
-## descricao_ocupacaoAGENTE ADMINISTRATIVO                                                                                   
-## descricao_ocupacaoAGENTE DE SAÃ\u009aDE E SANITARISTA                                                                     
-## descricao_ocupacaoAGENTE DE SERVIÃ\u0087OS FUNERÃ\u0081RIOS E EMBALSAMADOR                                                
-## descricao_ocupacaoAGENTE DE VIAGEM                                                                                        
-## descricao_ocupacaoAGENTE POSTAL                                                                                           
-## descricao_ocupacaoAGRÃ\u0094NOMO                                                                                          
-## descricao_ocupacaoAGRICULTOR                                                                                              
-## descricao_ocupacaoALMOXARIFE                                                                                              
-## descricao_ocupacaoANALISTA DE SISTEMAS                                                                                    
-## descricao_ocupacaoAPOSENTADO (EXCETO SERVIDOR PÃ\u009aBLICO)                                                              
-## descricao_ocupacaoARQUITETO                                                                                               
-## descricao_ocupacaoARTESÃ\u0083O                                                                                           
-## descricao_ocupacaoARTISTA PLÃ\u0081STICO E ASSEMELHADOS                                                                   
-## descricao_ocupacaoASSISTENTE SOCIAL                                                                                       
-## descricao_ocupacaoATLETA PROFISSIONAL E TÃ\u0089CNICO EM DESPORTOS                                                        
-## descricao_ocupacaoATOR E DIRETOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                      
-## descricao_ocupacaoAUXILIAR DE ESCRITÃ\u0093RIO E ASSEMELHADOS                                                             
-## descricao_ocupacaoAUXILIAR DE LABORATÃ\u0093RIO                                                                           
-## descricao_ocupacaoBANCÃ\u0081RIO E ECONOMIÃ\u0081RIO                                                                      
-## descricao_ocupacaoBIÃ\u0093LOGO                                                                                           
-## descricao_ocupacaoBIBLIOTECÃ\u0081RIO                                                                                     
-## descricao_ocupacaoBIOMÃ\u0089DICO                                                                                         
-## descricao_ocupacaoBOMBEIRO CIVIL                                                                                          
-## descricao_ocupacaoBOMBEIRO MILITAR                                                                                        
-## descricao_ocupacaoCABELEIREIRO E BARBEIRO                                                                                 
-## descricao_ocupacaoCANTOR E COMPOSITOR                                                                                     
-## descricao_ocupacaoCATADOR DE RECICLÃ\u0081VEIS                                                                            
-## descricao_ocupacaoCIENTISTA POLÃ\u008dTICO                                                                                
-## descricao_ocupacaoCOBRADOR DE TRANSPORTE COLETIVO                                                                         
-## descricao_ocupacaoCOMERCIANTE                                                                                             
-## descricao_ocupacaoCOMERCIÃ\u0081RIO                                                                                       
-## descricao_ocupacaoCOMUNICÃ\u0093LOGO                                                                                      
-## descricao_ocupacaoCONTADOR                                                                                                
-## descricao_ocupacaoCORRETOR DE IMÃ\u0093VEIS, SEGUROS, TÃ\u008dTULOS E VALORES                                             
-## descricao_ocupacaoCOZINHEIRO                                                                                              
-## descricao_ocupacaoDEPUTADO                                                                                             ***
-## descricao_ocupacaoDESENHISTA                                                                                              
-## descricao_ocupacaoDESPACHANTE                                                                                             
-## descricao_ocupacaoDIGITADOR                                                                                               
-## descricao_ocupacaoDIPLOMATA                                                                                               
-## descricao_ocupacaoDIRETOR DE EMPRESAS                                                                                     
-## descricao_ocupacaoDIRETOR DE ESTABELECIMENTO DE ENSINO                                                                    
-## descricao_ocupacaoDONA DE CASA                                                                                            
-## descricao_ocupacaoECONOMISTA                                                                                              
-## descricao_ocupacaoECONOMISTA DOMÃ\u0089STICO                                                                              
-## descricao_ocupacaoELETRICISTA E ASSEMELHADOS                                                                              
-## descricao_ocupacaoEMPREGADO DOMÃ\u0089STICO                                                                               
-## descricao_ocupacaoEMPRESÃ\u0081RIO                                                                                        
-## descricao_ocupacaoENFERMEIRO                                                                                              
-## descricao_ocupacaoENGENHEIRO                                                                                              
-## descricao_ocupacaoESCRITOR E CRÃ\u008dTICO                                                                                
-## descricao_ocupacaoESTETICISTA                                                                                             
-## descricao_ocupacaoESTIVADOR, CARREGADOR E ASSEMELHADOS                                                                    
-## descricao_ocupacaoESTOFADOR                                                                                               
-## descricao_ocupacaoESTUDANTE, BOLSISTA, ESTAGIÃ\u0081RIO E ASSEMELHADOS                                                    
-## descricao_ocupacaoFARMACÃ\u008aUTICO                                                                                      
-## descricao_ocupacaoFERROVIÃ\u0081RIO                                                                                       
-## descricao_ocupacaoFISCAL                                                                                                  
-## descricao_ocupacaoFISIOTERAPEUTA E TERAPEUTA OCUPACIONAL                                                                  
-## descricao_ocupacaoFOTÃ\u0093GRAFO E ASSEMELHADOS                                                                          
-## descricao_ocupacaoGARÃ\u0087OM                                                                                            
-## descricao_ocupacaoGARI OU LIXEIRO                                                                                         
-## descricao_ocupacaoGEÃ\u0093GRAFO                                                                                          
-## descricao_ocupacaoGEÃ\u0093LOGO                                                                                           
-## descricao_ocupacaoGEOFÃ\u008dSICO                                                                                         
-## descricao_ocupacaoGERENTE                                                                                                 
-## descricao_ocupacaoGUIA DE TURISMO                                                                                         
-## descricao_ocupacaoHISTORIADOR                                                                                             
-## descricao_ocupacaoINDUSTRIAL                                                                                              
-## descricao_ocupacaoJORNALEIRO                                                                                              
-## descricao_ocupacaoJORNALISTA E REDATOR                                                                                    
-## descricao_ocupacaoLOCUTOR E COMENTARISTA DE RÃ\u0081DIO E TELEVISÃ\u0083O E RADIALISTA                                    
-## descricao_ocupacaoMÃ\u0089DICO                                                                                            
-## descricao_ocupacaoMANICURE E MAQUILADOR                                                                                   
-## descricao_ocupacaoMÃ\u009aSICO                                                                                            
-## descricao_ocupacaoMASSAGISTA                                                                                              
-## descricao_ocupacaoMECÃ\u0082NICO DE MANUTENÃ\u0087Ã\u0083O                                                                
-## descricao_ocupacaoMEMBRO DAS FORÃ\u0087AS ARMADAS                                                                         
-## descricao_ocupacaoMEMBRO DO MINISTÃ\u0089RIO PÃ\u009aBLICO                                                                
-## descricao_ocupacaoMETEOROLOGISTA                                                                                          
-## descricao_ocupacaoMILITAR REFORMADO                                                                                       
-## descricao_ocupacaoMOTOBOY                                                                                                 
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE COLETIVO DE PASSAGEIROS                                       
-## descricao_ocupacaoMOTORISTA DE VEÃ\u008dCULOS DE TRANSPORTE DE CARGA                                                      
-## descricao_ocupacaoMOTORISTA PARTICULAR                                                                                    
-## descricao_ocupacaoNUTRICIONISTA E ASSEMELHADOS                                                                            
-## descricao_ocupacaoOCEANÃ\u0093GRAFO                                                                                       
-## descricao_ocupacaoOCUPANTE DE CARGO EM COMISSÃ\u0083O                                                                     
-## descricao_ocupacaoODONTÃ\u0093LOGO                                                                                        
-## descricao_ocupacaoOPERADOR DE APARELHOS DE PRODUÃ\u0087Ã\u0083O INDUSTRIAL                                                
-## descricao_ocupacaoOPERADOR DE COMPUTADOR                                                                                  
-## descricao_ocupacaoOPERADOR DE EQUIPAMENTO DE RÃ\u0081DIO, TELEVISÃ\u0083O, SOM E CINEMA                                   
-## descricao_ocupacaoOUTROS                                                                                                  
-## descricao_ocupacaoPADEIRO, CONFEITEIRO E ASSEMELHADOS                                                                     
-## descricao_ocupacaoPECUARISTA                                                                                              
-## descricao_ocupacaoPEDAGOGO                                                                                                
-## descricao_ocupacaoPESCADOR                                                                                                
-## descricao_ocupacaoPETROLEIRO                                                                                              
-## descricao_ocupacaoPILOTO DE AVIAÃ\u0087Ã\u0083O COMERCIAL, NAVEGADOR, MECÃ\u0082NICO DE VÃ\u0094O E ASSEMELHADOS          
-## descricao_ocupacaoPOLICIAL CIVIL                                                                                          
-## descricao_ocupacaoPOLICIAL MILITAR                                                                                        
-## descricao_ocupacaoPORTEIRO DE EDIFÃ\u008dCIO, ASCENSORISTA, GARAGISTA E ZELADOR                                           
-## descricao_ocupacaoPRODUTOR AGROPECUÃ\u0081RIO                                                                             
-## descricao_ocupacaoPRODUTOR DE ESPETÃ\u0081CULOS PÃ\u009aBLICOS                                                            
-## descricao_ocupacaoPROFESSOR DE ENSINO FUNDAMENTAL                                                                         
-## descricao_ocupacaoPROFESSOR DE ENSINO MÃ\u0089DIO                                                                         
-## descricao_ocupacaoPROFESSOR DE ENSINO SUPERIOR                                                                            
-## descricao_ocupacaoPROFESSOR E INSTRUTOR DE FORMAÃ\u0087Ã\u0083O PROFISSIONAL                                              
-## descricao_ocupacaoPROGRAMADOR DE COMPUTADOR                                                                               
-## descricao_ocupacaoPSICÃ\u0093LOGO                                                                                         
-## descricao_ocupacaoPUBLICITÃ\u0081RIO                                                                                      
-## descricao_ocupacaoQUÃ\u008dMICO                                                                                           
-## descricao_ocupacaoRECEPCIONISTA                                                                                           
-## descricao_ocupacaoRELAÃ\u0087Ã\u0095ES-PÃ\u009aBLICAS                                                                     
-## descricao_ocupacaoREPRESENTANTE COMERCIAL                                                                                 
-## descricao_ocupacaoSACERDOTE OU MEMBRO DE ORDEM OU SEITA RELIGIOSA                                                         
-## descricao_ocupacaoSECRETÃ\u0081RIO E DATILÃ\u0093GRAFO                                                                    
-## descricao_ocupacaoSENADOR                                                                                                 
-## descricao_ocupacaoSERRALHEIRO                                                                                             
-## descricao_ocupacaoSERVENTUÃ\u0081RIO DE JUSTIÃ\u0087A                                                                     
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO CIVIL APOSENTADO                                                                 
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO ESTADUAL                                                                         
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO FEDERAL                                                                          
-## descricao_ocupacaoSERVIDOR PÃ\u009aBLICO MUNICIPAL                                                                        
-## descricao_ocupacaoSOCIÃ\u0093LOGO                                                                                         
-## descricao_ocupacaoSUPERVISOR, INSPETOR E AGENTE DE COMPRAS E VENDAS                                                       
-## descricao_ocupacaoTÃ\u0089CNICO CONTABILIDADE, ESTATÃ\u008dSTICA, ECONOMIA DOMÃ\u0089STICA E ADMINISTRAÃ\u0087Ã\u0083O    
-## descricao_ocupacaoTÃ\u0089CNICO DE ELETRICIDADE, ELETRÃ\u0094NICA E TELECOMUNICAÃ\u0087Ã\u0095ES                          
-## descricao_ocupacaoTÃ\u0089CNICO DE ENFERMAGEM E ASSEMELHADOS (EXCETO ENFERMEIRO)                                          
-## descricao_ocupacaoTÃ\u0089CNICO DE LABORATÃ\u0093RIO E RAIOS X                                                            
-## descricao_ocupacaoTÃ\u0089CNICO DE MECÃ\u0082NICA                                                                         
-## descricao_ocupacaoTÃ\u0089CNICO DE MINERAÃ\u0087Ã\u0083O, METALURGIA E GEOLOGIA                                           
-## descricao_ocupacaoTÃ\u0089CNICO DE QUÃ\u008dMICA                                                                          
-## descricao_ocupacaoTÃ\u0089CNICO EM AGRONOMIA E AGRIMENSURA                                                                
-## descricao_ocupacaoTÃ\u0089CNICO EM EDIFICAÃ\u0087Ã\u0095ES                                                                
-## descricao_ocupacaoTÃ\u0089CNICO EM INFORMÃ\u0081TICA                                                                      
-## descricao_ocupacaoTAXISTA                                                                                                 
-## descricao_ocupacaoTERAPEUTA                                                                                               
-## descricao_ocupacaoTORNEIRO MECÃ\u0082NICO                                                                                 
-## descricao_ocupacaoTRABALHADOR DE CONSTRUÃ\u0087Ã\u0083O CIVIL                                                             
-## descricao_ocupacaoTRABALHADOR DE FABRICAÃ\u0087Ã\u0083O DE ROUPAS                                                         
-## descricao_ocupacaoTRABALHADOR DOS SERVIÃ\u0087OS DE CONTABILIDADE, DE CAIXA E ASSEMELHADOS                                
-## descricao_ocupacaoTRABALHADOR EM ATIVIDADE DE PROCESSAMENTO QUÃ\u008dMICO                                                 
-## descricao_ocupacaoTRABALHADOR METALÃ\u009aRGICO E SIDERÃ\u009aRGICO                                                       
-## descricao_ocupacaoTRABALHADOR RURAL                                                                                       
-## descricao_ocupacaoVENDEDOR DE COMÃ\u0089RCIO VAREJISTA E ATACADISTA                                                       
-## descricao_ocupacaoVENDEDOR PRACISTA, REPRESENTANTE, CAIXEIRO-VIAJANTE E ASSEMELHADOS                                      
-## descricao_ocupacaoVEREADOR                                                                                                
-## descricao_ocupacaoVETERINÃ\u0081RIO                                                                                       
-## descricao_ocupacaoVIGILANTE                                                                                               
-## descricao_cor_racaBRANCA                                                                                                  
-## descricao_cor_racaINDÃ\u008dGENA                                                                                          
-## descricao_cor_racaPARDA                                                                                                   
-## descricao_cor_racaPRETA                                                                                                   
-## despesa_max_campanha                                                                                                   ** 
+##                                         Estimate Std. Error z value
+## (Intercept)                            2.518e+01  1.010e+03   0.025
+## UFAL                                  -2.238e+00  9.038e-01  -2.477
+## UFAM                                   9.337e-01  1.148e+00   0.813
+## UFAP                                  -4.151e+00  8.243e-01  -5.035
+## UFBA                                  -2.735e+00  8.153e-01  -3.354
+## UFCE                                  -2.455e+00  8.241e-01  -2.979
+## UFDF                                  -2.494e+00  8.423e-01  -2.961
+## UFES                                  -2.342e+00  8.389e-01  -2.791
+## UFGO                                   2.546e-01  1.036e+00   0.246
+## UFMA                                  -4.023e+00  8.265e-01  -4.867
+## UFMG                                  -1.100e+00  8.172e-01  -1.346
+## UFMS                                  -1.583e-01  9.428e-01  -0.168
+## UFMT                                  -1.323e+00  9.760e-01  -1.355
+## UFPA                                  -2.704e+00  8.200e-01  -3.298
+## UFPB                                  -3.195e+00  8.594e-01  -3.718
+## UFPE                                  -3.657e+00  8.328e-01  -4.391
+## UFPI                                   1.259e-01  9.745e-01   0.129
+## UFPR                                  -2.395e+00  8.062e-01  -2.971
+## UFRJ                                  -2.180e+00  7.891e-01  -2.763
+## UFRN                                  -2.121e+00  9.304e-01  -2.280
+## UFRO                                  -3.001e+00  8.404e-01  -3.571
+## UFRR                                  -4.542e+00  8.400e-01  -5.407
+## UFRS                                  -1.541e+00  8.153e-01  -1.890
+## UFSC                                  -2.068e+00  8.927e-01  -2.317
+## UFSE                                  -4.695e+00  8.679e-01  -5.410
+## UFSP                                  -1.371e+00  7.952e-01  -1.724
+## UFTO                                  -2.126e+00  8.721e-01  -2.438
+## partidoPCB                             1.546e+01  1.475e+03   0.010
+## partidoPC do B                         3.912e+00  6.617e-01   5.912
+## partidoPCO                             1.515e+01  2.765e+03   0.005
+## partidoPDT                            -3.095e-01  4.173e-01  -0.742
+## partidoPEN                             1.767e-02  5.252e-01   0.034
+## partidoPHS                            -8.023e-01  4.927e-01  -1.628
+## partidoPMDB                           -2.865e-01  4.086e-01  -0.701
+## partidoPMN                             5.539e-01  5.651e-01   0.980
+## partidoPP                              6.222e-01  4.465e-01   1.393
+## partidoPPL                             1.780e+01  9.060e+02   0.020
+## partidoPPS                             3.515e-01  5.881e-01   0.598
+## partidoPR                             -1.622e+00  4.337e-01  -3.740
+## partidoPRB                            -7.431e-01  4.547e-01  -1.634
+## partidoPROS                            1.125e+00  7.564e-01   1.488
+## partidoPRP                            -4.891e-01  5.652e-01  -0.865
+## partidoPRTB                            1.614e+01  6.027e+02   0.027
+## partidoPSB                            -2.657e-01  4.129e-01  -0.643
+## partidoPSC                            -1.401e+00  5.047e-01  -2.776
+## partidoPSD                            -6.545e-01  4.573e-01  -1.431
+## partidoPSDB                           -7.268e-01  4.143e-01  -1.754
+## partidoPSDC                            9.996e-01  6.943e-01   1.440
+## partidoPSL                             2.143e+01  6.526e+02   0.033
+## partidoPSOL                           -1.833e-01  4.655e-01  -0.394
+## partidoPSTU                            1.571e+01  8.750e+02   0.018
+## partidoPT                              2.056e-01  4.049e-01   0.508
+## partidoPTB                            -8.076e-01  4.414e-01  -1.829
+## partidoPTC                            -5.257e-01  5.631e-01  -0.934
+## partidoPT do B                         8.820e+00  1.285e+01   0.686
+## partidoPTN                            -2.273e+00  4.687e-01  -4.849
+## partidoPV                             -7.178e-01  4.350e-01  -1.650
+## partidoSD                             -4.641e-01  4.839e-01  -0.959
+## quantidade_doacoes                    -1.447e-02  4.091e-03  -3.538
+## quantidade_doadores                   -9.295e-03  4.875e-03  -1.907
+## total_receita                          7.810e-05  1.984e-05   3.936
+## media_receita                         -1.237e-05  6.782e-06  -1.824
+## recursos_de_outros_candidatos.comites -8.160e-05  1.979e-05  -4.124
+## recursos_de_partidos                  -7.801e-05  1.985e-05  -3.929
+## recursos_de_pessoas_fÃ.sicas          -8.199e-05  1.972e-05  -4.157
+## recursos_de_pessoas_juridicas         -7.843e-05  1.979e-05  -3.962
+## recursos_proprios                     -7.771e-05  1.978e-05  -3.930
+## quantidade_despesas                   -2.929e-03  6.691e-04  -4.377
+## quantidade_fornecedores                3.124e-03  9.345e-04   3.343
+## total_despesa                         -1.949e-06  1.269e-06  -1.535
+## media_despesa                         -2.780e-04  5.576e-05  -4.985
+## sexoMASCULINO                         -5.613e-01  1.661e-01  -3.380
+## descricao_cor_racaBRANCA              -1.902e+01  1.010e+03  -0.019
+## descricao_cor_racaINDÃ\u008dGENA      -3.068e+00  2.188e+03  -0.001
+## descricao_cor_racaPARDA               -1.897e+01  1.010e+03  -0.019
+## descricao_cor_racaPRETA               -1.881e+01  1.010e+03  -0.019
+## despesa_max_campanha                   1.047e-07  3.254e-08   3.219
+## isDeputado                            -2.332e+00  1.957e-01 -11.914
+##                                       Pr(&gt;|z|)    
+## (Intercept)                           0.980113    
+## UFAL                                  0.013262 *  
+## UFAM                                  0.416166    
+## UFAP                                  4.77e-07 ***
+## UFBA                                  0.000795 ***
+## UFCE                                  0.002890 ** 
+## UFDF                                  0.003069 ** 
+## UFES                                  0.005249 ** 
+## UFGO                                  0.805829    
+## UFMA                                  1.13e-06 ***
+## UFMG                                  0.178254    
+## UFMS                                  0.866664    
+## UFMT                                  0.175270    
+## UFPA                                  0.000975 ***
+## UFPB                                  0.000201 ***
+## UFPE                                  1.13e-05 ***
+## UFPI                                  0.897243    
+## UFPR                                  0.002971 ** 
+## UFRJ                                  0.005731 ** 
+## UFRN                                  0.022596 *  
+## UFRO                                  0.000356 ***
+## UFRR                                  6.40e-08 ***
+## UFRS                                  0.058712 .  
+## UFSC                                  0.020517 *  
+## UFSE                                  6.31e-08 ***
+## UFSP                                  0.084715 .  
+## UFTO                                  0.014770 *  
+## partidoPCB                            0.991637    
+## partidoPC do B                        3.38e-09 ***
+## partidoPCO                            0.995629    
+## partidoPDT                            0.458368    
+## partidoPEN                            0.973164    
+## partidoPHS                            0.103473    
+## partidoPMDB                           0.483157    
+## partidoPMN                            0.327024    
+## partidoPP                             0.163480    
+## partidoPPL                            0.984327    
+## partidoPPS                            0.550059    
+## partidoPR                             0.000184 ***
+## partidoPRB                            0.102254    
+## partidoPROS                           0.136842    
+## partidoPRP                            0.386872    
+## partidoPRTB                           0.978638    
+## partidoPSB                            0.519910    
+## partidoPSC                            0.005510 ** 
+## partidoPSD                            0.152342    
+## partidoPSDB                           0.079410 .  
+## partidoPSDC                           0.149910    
+## partidoPSL                            0.973799    
+## partidoPSOL                           0.693793    
+## partidoPSTU                           0.985678    
+## partidoPT                             0.611498    
+## partidoPTB                            0.067337 .  
+## partidoPTC                            0.350476    
+## partidoPT do B                        0.492463    
+## partidoPTN                            1.24e-06 ***
+## partidoPV                             0.098943 .  
+## partidoSD                             0.337500    
+## quantidade_doacoes                    0.000403 ***
+## quantidade_doadores                   0.056567 .  
+## total_receita                         8.29e-05 ***
+## media_receita                         0.068211 .  
+## recursos_de_outros_candidatos.comites 3.72e-05 ***
+## recursos_de_partidos                  8.53e-05 ***
+## recursos_de_pessoas_fÃ.sicas          3.22e-05 ***
+## recursos_de_pessoas_juridicas         7.42e-05 ***
+## recursos_proprios                     8.51e-05 ***
+## quantidade_despesas                   1.20e-05 ***
+## quantidade_fornecedores               0.000828 ***
+## total_despesa                         0.124677    
+## media_despesa                         6.20e-07 ***
+## sexoMASCULINO                         0.000725 ***
+## descricao_cor_racaBRANCA              0.984980    
+## descricao_cor_racaINDÃ\u008dGENA      0.998881    
+## descricao_cor_racaPARDA               0.985017    
+## descricao_cor_racaPRETA               0.985139    
+## despesa_max_campanha                  0.001288 ** 
+## isDeputado                             &lt; 2e-16 ***
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
 ## (Dispersion parameter for binomial family taken to be 1)
 ## 
-##     Null deviance: 2024.71  on 3101  degrees of freedom
-## Residual deviance:  912.44  on 2944  degrees of freedom
-## AIC: 1228.4
+##     Null deviance: 7735.5  on 5579  degrees of freedom
+## Residual deviance: 2233.0  on 5502  degrees of freedom
+## AIC: 2389
 ## 
-## Number of Fisher Scoring iterations: 18</code></pre>
+## Number of Fisher Scoring iterations: 17</code></pre>
+<pre class="r"><code>rf_grid &lt;- expand.grid(mtry = c(1:6))
+
+#modelo1 &lt;- caret::train(form=situacao_final ~.,
+#                 data = up_train,
+#                 method=&quot;rf&quot;,
+#                 preProcess=c(&quot;center&quot;,&quot;scale&quot;),
+#                 tuneGrid = rf_grid,
+#                 trControl=fitControl,
+#                 ntree = 200)
+#modelo1
+
+#arvore1 &lt;- train(situacao_final ~.,
+ #                data=up_train,
+ #                method = &quot;rpart&quot;,
+  #               cp=0.001,  # parâmetro de complexidade
+   #              maxdepth=20)
+#arvore1</code></pre>
+<pre class="r"><code>#control &lt;- rpart.control(maxdepth=20,
+ #                        minsplit=20,
+  #                       cp=0.001)
+ 
+#arvore2 &lt;- rpart(situacao_final ~.,
+ #                data=up_train, control = control)
+
+#prp(arvore2)</code></pre>
+<pre class="r"><code>#modelo &lt;- train(situacao_final ~.,
+ #               data=up_train,
+  #              method = &quot;nnet&quot;,
+   #             trControl = fitControl)
+
+#modelo</code></pre>
+<pre class="r"><code>#test_data$prediction&lt;- predict(modelo, test_data)
+#newCSV &lt;- ID
+#newCSV$prediction &lt;- prediction
+#write.csv(newCSV, &quot;sample_submission.csv&quot;, row.names=FALSE)
+
+#TP &lt;- test_data %&gt;% filter(situacao_final == &quot;eleito&quot;, prediction == &quot;eleito&quot;) %&gt;% nrow()
+#TN &lt;- test_data %&gt;% filter(situacao_final == &quot;nao_eleito&quot; , prediction == &quot;nao_eleito&quot; ) %&gt;% nrow()
+#FP &lt;- test_data %&gt;% filter(situacao_final == &quot;nao_eleito&quot; , prediction == &quot;eleito&quot;) %&gt;% nrow() 
+#FN &lt;- test_data %&gt;% filter(situacao_final == &quot;eleito&quot;, prediction == &quot;nao_eleito&quot; ) %&gt;% nrow()
+
+#accuracy &lt;- (TP + TN)/(TP + TN + FP + FN) 
+#precision &lt;- TP / (TP + FP)
+#recall &lt;- TP / (TP + FN)
+
+#f_measure &lt;- 2 * (precision * recall) / (precision + recall)
+
+#f_measure
+#accuracy
+#precision
+#recall
+
+#confusionMatrix(test_data$prediction, test_data$situacao_final)</code></pre>
 
 
 
