@@ -70,7 +70,7 @@ Abaixo tem-se os dois métodos citados acima, além do método ROSE, e lista o n
 
 ```{r}
 
-train_data <- train_data %>% select(-descricao_ocupacao, -recursos_de_outros_candidatos.comites, -recursos_de_partidos, -recursos_de_pessoas_fÃ.sicas, -recursos_de_pessoas_juridicas, -recursos_proprios)
+train_data <- train_data %>% select(-recursos_de_outros_candidatos.comites, -recursos_de_partidos, -recursos_de_pessoas_fÃ.sicas, -recursos_de_pessoas_juridicas, -recursos_proprios)
 
 #input_teste$isDeputado <- ifelse(input_teste$descricao_ocupacao == "DEPUTADO", 1, 0)
 #input_teste <- input_teste %>% select(total_receita, despesa_max_campanha, isDeputado)
@@ -171,25 +171,18 @@ precision
 recall
 
 confusionMatrix(test_data$prediction, test_data$situacao_final)
+varImp(adaboost)
 ```
 
-No treino, o modelo teve acurácia igual a X; na validação, esse valor diminuiu/aumentou .......
-
-O resultado foi satisfatório pois o modelo conseguiu predizer corretamente o resultado da eleição na maioria dos casos. Possui nível de falso-positivo consideravelmente elevado, que acarretou na diminuição da precisão do modelo; e baixo nível de falso negativo, que aumenta o recall. O f-measure, que é medido calculando a média harmônica entre precisão e recall, ter valor próximo a 1 é um bom indicador que o modelo é um bom preditor.
+No treino, o modelo teve acurácia igual a 0.9878164; na validação, esse valor diminuiu para 0.946757.O resultado foi satisfatório pois o modelo conseguiu predizer corretamente o resultado da eleição na maioria dos casos. Possui nível de falso-positivo consideravelmente elevado, que acarretou na diminuição da precisão do modelo; e baixo nível de falso negativo, que aumenta o recall. O f-measure, que é medido calculando a média harmônica entre precisão e recall, ter valor próximo a 1 é um bom indicador que o modelo é um bom preditor.
 
 **4. Interprete as saídas dos modelos. Quais atributos parecem ser mais importantes de acordo com cada modelo? Crie pelo menos um novo atributo que não está nos dados originais e estude o impacto desse atributo.**
 
 Vamos analisar o impacto, em cada modelo, de criar um novo atributo chamado isDeputado, que possui valor 1 caso o candidato já seja deputado e 0, caso contrário.
 
 ```{r}
-
 rose_train$isDeputado <- ifelse(rose_train$descricao_ocupacao == "DEPUTADO", 1, 0)
 test_data$isDeputado <- ifelse(test_data$descricao_ocupacao == "DEPUTADO", 1, 0)
-
-#removendo descricao_ocupacao do treino e da validação
-rose_train <- rose_train %>% select(-descricao_ocupacao)
-test_data <- test_data %>% select(-descricao_ocupacao)
-
 ```
 
 Regressão Logística
@@ -197,17 +190,19 @@ Regressão Logística
 ```{r}
 # antes do atributo 
 summary(reg_logistica)
-varImp(reg_logistica)
-
-# re-treinando o modelo
-reg_logistica <- glm(formula=situacao_final~., data = rose_train, family=binomial)
-
-# depois do atributo
-summary(reg_logistica)
-varImp(reg_logistica)
 ```
 
-No modelo de Regressão Logística, os atributos parecem ser mais importantes. 
+```{r warning=FALSE}
+# re-treinando o modelo
+reg_logistica <- glm(formula=situacao_final~., data = rose_train, family=binomial)
+```
+
+```{r}
+# depois do atributo
+summary(reg_logistica)
+```
+
+No modelo de Regressão Logística, alguns atributos de descricao_ocupacao, quantidade_fornecedores, total_despesa, media_despesa, sexo, recursos_de_pessoas_físicas, recursos_de_pessoas_juridicas, quantidade_doacoes, quantidade_doadores, total_receita, media_receita uf e partido parecem ser bem importantes. A inserção do atributo isDeputado não teve muita relevância para o modelo de regressão logística e o modelo teve acurácia reduzida no treino.
 
 Árvore de Decisão
 
@@ -215,7 +210,9 @@ No modelo de Regressão Logística, os atributos parecem ser mais importantes.
 # antes do atributo 
 arvore
 varImp(arvore)
+```
 
+```{r}
 # re-treinando o modelo
 arvore <- train(
     x = rose_train[, names(rose_train) != "situacao_final"],
@@ -223,28 +220,36 @@ arvore <- train(
     method = "rpart",
     trControl = fitControl,
     control = rpart.control(cp = 0.4))
+```
 
+```{r}
 # depois do atributo
 arvore
 varImp(arvore)
 ```
 
-No modelo de Árvore de Decisão, os atributos XYWMSSM parecem ser mais importantes.
+No modelo de Árvore de Decisão, os atributos total_despesa, recursos_de_pessoas_juridicas, total_receita, recursos_de_partidos e quantidade_doacoes parecem ser mais importantes. A inserção da variável isDeputado não aumentou a acurácia significantemente.
 
 Adaboost
 
 ```{r}
-# antes do atributo 
+# antes do atributo Adaboost.M1    0.9878164  0.9756358
 adaboost
 varImp(adaboost)
+```
 
+```{r}
 # re-treinando o modelo
 adaboost <- train(x = rose_train[, names(rose_train) != "situacao_final"],
                 y = rose_train$situacao_final,
                 method = "adaboost",
                 trControl = fitControl)
+```
 
+```{r}
 # depois do atributo
 adaboost
 varImp(adaboost)
 ```
+
+No modelo Adaboost, total_receita, total_despesa, quantidade_doacoes, media_receita, recursos_de_pessoas_físicas, quantidade_doadores, quantidade_despesas, recursos_de_pessoas_juridicas, recursos_de_partidos, quantidade_fornecedores e media_despesa parecem ser as mais importantes. A inserção do atributo diminuiu a acurácia do modelo no treino.
