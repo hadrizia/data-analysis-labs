@@ -1,0 +1,60 @@
+---
+title: "Lab04"
+author: "Hadrizia Santos"
+date: "12 de março de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Deep Learning em R usando o pacote Keras
+
+  Este arquivo tem como objetivo ensinar a implementar e interpretar uma rede do tipo multilayer perceptron (MLP) em R e Keras, um framework de deep learning. O tutorial original pode ser encontrado em: https://www.datacamp.com/community/tutorials/keras-r-deep-learning.
+  
+**Instalando Keras**
+  
+  O primeiro passo é instalar o pacote Keras. Perceba que, para instalá-lo, precisamos instalar antes o pacote devtools: 
+  
+```{r}
+#install.packages("devtools")
+#devtools::install_github("rstudio/keras")
+```
+
+  Assim que os pacotes necessários forem instalados, já se pode importar a biblioteca Keras e instalar o Keras e o tensorflow no projeto:
+  
+```{r}
+# Importando pacote Keras
+library(keras)
+
+# Instalando Keras e TensorFlow
+install_keras()
+```
+
+**Carregando os dados**
+
+  O Keras possui alguns dataset embutidos, que podem ser listados em https://github.com/keras-team/keras/tree/master/keras/datasets, carregados e utilizados no projeto a partir do próprio pacote. 
+Também é possível baixar datasets no site da UCI, que contém repositórios de dados para machine learning e podem ser encontrados em http://archive.ics.uci.edu/ml/index.php.
+
+  Os dados utilizados neste tutorial podem ser acessados em http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data e constituem o dataset mais famoso do UCI: o Iris dataset.
+  
+```{r}
+# Carregando os dados
+iris <- read.csv(url("http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"), header = FALSE) 
+```
+
+**Explorando os dados**
+
+  Isis é um gênero de flores e contém sépalas e pétalas. As sépalas são as partes semelhantes a folhas, normalmente de cor verde, que envolvem a flor, e as pétalas são normalmente coloridas. Nas flores do gênero Isis, as sépalas e pétalas são basatante parecidas, como se pode observar nas figuras abaixo: 
+  
+![iris](iris-machinelearning.png)
+  Ag
+
+
+
+
+
+
+
+
